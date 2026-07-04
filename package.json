@@ -17,10 +17,11 @@
     ".": "./src/cli/index.ts",
     "./config": "./src/core/config.ts",
     "./site": "./src/core/site.ts",
-    "./pages": "./src/core/pages.ts"
+    "./pages": "./src/core/pages.ts",
+    "./html": "./src/core/html.ts"
   },
   "engines": {
-    "bun": ">=1.1.0"
+    "bun": ">=1.3.14"
   },
   "scripts": {
     "build": "bun run src/cli/index.ts build",
@@ -29,9 +30,7 @@
     "typecheck": "tsc --noEmit",
     "test": "bun test"
   },
-  "dependencies": {
-    "ventojs": "^2.3.1"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@types/bun": "latest"
   },

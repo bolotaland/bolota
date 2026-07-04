@@ -3,7 +3,7 @@ import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import { Site } from "../src/core/site.ts";
 import { transformMarkdown } from "../src/plugins/markdown.ts";
-import { applyLayout, createVentoEnv } from "../src/plugins/vento.ts";
+import { applyLayout } from "../src/plugins/templates.ts";
 import { copyAssets } from "../src/plugins/assets.ts";
 import type { BolotaConfig } from "../src/core/config.ts";
 
@@ -35,25 +35,22 @@ describe("Site.build", () => {
       `---\ntitle: Hello\nlayout: base\n---\n\n# Hello`,
     );
     await Bun.write(
-      join(tmpRoot, "layouts", "base.vto"),
-      `<html><body>{{ content |> safe }}</body></html>`,
+      join(tmpRoot, "layouts", "base.ts"),
+      `export default ({ content }) => \`<html><body>\${content}</body></html>\`;`,
     );
 
     const config = { ...baseConfig, srcDir: tmpRoot };
     const site = new Site(config, tmpRoot);
-    const env = createVentoEnv(config);
 
     site.use({
       name: "markdown",
-      transform(page) {
-        return transformMarkdown(page);
-      },
+      async transform(page, site) { return transformMarkdown(page, site); },
     });
 
     site.use({
-      name: "vento",
+      name: "templates",
       async transform(page, site) {
-        return applyLayout(page, site, env);
+        return applyLayout(page, site);
       },
     });
 
@@ -72,7 +69,7 @@ describe("Site.build", () => {
     expect(await outputFile.exists()).toBe(true);
 
     const html = await outputFile.text();
-    expect(html).toContain("<h1>Hello</h1>");
+    expect(html).toContain(`<h1 id="hello">Hello</h1>`);
     expect(html).toContain("<body>");
   });
 
@@ -85,9 +82,7 @@ describe("Site.build", () => {
     const site = new Site(config, tmpRoot);
     site.use({
       name: "markdown",
-      transform(page) {
-        return transformMarkdown(page);
-      },
+      async transform(page, site) { return transformMarkdown(page, site); },
     });
 
     await site.build();

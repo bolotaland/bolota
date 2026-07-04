@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { Site } from "../src/core/site.ts";
 import { loadConfig } from "../src/core/config.ts";
 import { transformMarkdown } from "../src/plugins/markdown.ts";
-import { applyLayout, createVentoEnv } from "../src/plugins/vento.ts";
+import { applyLayout } from "../src/plugins/templates.ts";
 import type { BolotaConfig } from "../src/core/config.ts";
 
 const tmpBase = join(import.meta.dir, "__tmp_data");
@@ -20,19 +20,16 @@ const baseConfig: BolotaConfig = {
 
 async function buildSite(config: BolotaConfig, cwd: string): Promise<Site> {
   const site = new Site(config, cwd);
-  const env = createVentoEnv(config);
 
   site.use({
     name: "markdown",
-    transform(page) {
-      return transformMarkdown(page);
-    },
+    async transform(page, site) { return transformMarkdown(page, site); },
   });
 
   site.use({
-    name: "vento",
+    name: "templates",
     async transform(page, site) {
-      return applyLayout(page, site, env);
+      return applyLayout(page, site);
     },
   });
 
@@ -58,15 +55,15 @@ describe("shared and global data", () => {
     );
     await Bun.write(join(tmpRoot, "content", "hello.md"), `# Hello`);
     await Bun.write(
-      join(tmpRoot, "layouts", "base.vto"),
-      `<html>{{ author }}: {{ content |> safe }}</html>`,
+      join(tmpRoot, "layouts", "base.ts"),
+      `export default ({ author, content }) => \`<html>\${Bun.escapeHTML(String(author))}: \${content}</html>\`;`,
     );
 
     const config = { ...baseConfig, srcDir: tmpRoot };
     await buildSite(config, tmpRoot);
 
     const html = await Bun.file(join(tmpRoot, "_site", "hello", "index.html")).text();
-    expect(html).toContain("<h1>Hello</h1>");
+    expect(html).toContain(`<h1 id="hello">Hello</h1>`);
     expect(html).toContain("Root:");
   });
 
@@ -81,8 +78,8 @@ describe("shared and global data", () => {
     );
     await Bun.write(join(tmpRoot, "content", "posts", "hello.md"), `# Post`);
     await Bun.write(
-      join(tmpRoot, "layouts", "base.vto"),
-      `<html>{{ author }}: {{ content |> safe }}</html>`,
+      join(tmpRoot, "layouts", "base.ts"),
+      `export default ({ author, content }) => \`<html>\${Bun.escapeHTML(String(author))}: \${content}</html>\`;`,
     );
 
     const config = { ...baseConfig, srcDir: tmpRoot };
@@ -99,8 +96,8 @@ describe("shared and global data", () => {
     );
     await Bun.write(join(tmpRoot, "content", "hello.md"), `# Hello`);
     await Bun.write(
-      join(tmpRoot, "layouts", "base.vto"),
-      `<html>{{ year }}: {{ content |> safe }}</html>`,
+      join(tmpRoot, "layouts", "base.ts"),
+      `export default ({ year, content }) => \`<html>\${year}: \${content}</html>\`;`,
     );
 
     const config = { ...baseConfig, srcDir: tmpRoot };
@@ -117,8 +114,8 @@ describe("shared and global data", () => {
     );
     await Bun.write(join(tmpRoot, "content", "hello.md"), `# Hello`);
     await Bun.write(
-      join(tmpRoot, "layouts", "base.vto"),
-      `<html>{{ globalNumber }}: {{ content |> safe }}</html>`,
+      join(tmpRoot, "layouts", "base.ts"),
+      `export default ({ globalNumber, content }) => \`<html>\${globalNumber}: \${content}</html>\`;`,
     );
 
     const config = {
@@ -135,10 +132,7 @@ describe("shared and global data", () => {
   it("uses global data from a function config via site.data()", async () => {
     await Bun.write(
       join(tmpRoot, "bolota.config.ts"),
-      `export default function (site) {
-        site.data("globalNumber", 99);
-        return { srcDir: ${JSON.stringify(tmpRoot)} };
-      }`,
+      `export default function (site) {\n        site.data("globalNumber", 99);\n        return { srcDir: ${JSON.stringify(tmpRoot)} };\n      }`,
     );
     await Bun.write(
       join(tmpRoot, "content", "_data.yml"),
@@ -146,25 +140,22 @@ describe("shared and global data", () => {
     );
     await Bun.write(join(tmpRoot, "content", "hello.md"), `# Hello`);
     await Bun.write(
-      join(tmpRoot, "layouts", "base.vto"),
-      `<html>{{ globalNumber }}: {{ content |> safe }}</html>`,
+      join(tmpRoot, "layouts", "base.ts"),
+      `export default ({ globalNumber, content }) => \`<html>\${globalNumber}: \${content}</html>\`;`,
     );
 
     const { config, data } = await loadConfig(tmpRoot);
     const site = new Site(config, tmpRoot, data);
-    const env = createVentoEnv(config);
 
     site.use({
       name: "markdown",
-      transform(page) {
-        return transformMarkdown(page);
-      },
+      async transform(page, site) { return transformMarkdown(page, site); },
     });
 
     site.use({
-      name: "vento",
+      name: "templates",
       async transform(page, site) {
-        return applyLayout(page, site, env);
+        return applyLayout(page, site);
       },
     });
 
@@ -184,8 +175,8 @@ describe("shared and global data", () => {
       `---\nauthor: Frontmatter\n---\n# Hello`,
     );
     await Bun.write(
-      join(tmpRoot, "layouts", "base.vto"),
-      `<html>{{ author }}: {{ content |> safe }}</html>`,
+      join(tmpRoot, "layouts", "base.ts"),
+      `export default ({ author, content }) => \`<html>\${Bun.escapeHTML(String(author))}: \${content}</html>\`;`,
     );
 
     const config = {
@@ -208,8 +199,8 @@ describe("shared and global data", () => {
     await Bun.write(join(tmpRoot, "content", "index.md"), `# Home`);
     await Bun.write(join(tmpRoot, "content", "posts", "hello.md"), `# Post`);
     await Bun.write(
-      join(tmpRoot, "layouts", "base.vto"),
-      `<html>{{ scopedValue ?? "none" }}: {{ content |> safe }}</html>`,
+      join(tmpRoot, "layouts", "base.ts"),
+      `export default ({ scopedValue, content }) => \`<html>\${scopedValue ?? "none"}: \${content}</html>\`;`,
     );
 
     const config = {

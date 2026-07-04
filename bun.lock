@@ -4,9 +4,6 @@
   "workspaces": {
     "": {
       "name": "bolota",
-      "dependencies": {
-        "ventojs": "^2.3.1",
-      },
       "devDependencies": {
         "@types/bun": "latest",
       },
@@ -25,7 +22,5 @@
     "typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 
     "undici-types": ["undici-types@8.3.0", "", {}, "sha512-j375ScV60dom+YkPFIfTLcOiPxkN/buHz5GobjLhixFuANaNs3C9l4GmrWqejgXWJ7BbJcFYpTEUkS1Ge8bpZQ=="],
-
-    "ventojs": ["ventojs@2.3.1", "", {}, "sha512-saGBMwQF+TZZJLTixSzwbZl+O5cNdBhMXNYAwegQ+/EsXSllSzrzgrZN7MU07ZOea3M+I/xBTwEFVb0HU6moUw=="],
   }
 }

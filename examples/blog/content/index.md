@@ -1,6 +1,6 @@
 ---
 title: Welcome
-layout: base
+layout: index
 ---
 
 # Welcome to Bolota
@@ -9,7 +9,7 @@ A minimal static site generator powered by [Bun](https://bun.sh) and vanilla Typ
 
 ## Latest Posts
 
-- [About Bolota]({{ './about.html' |> url }})
-- [Projects]({{ './projects.html' |> url }})
+- [About Bolota](@/about.md)
+- [Projects](@/projects.md)
 
-Bolota uses [Vento](https://vento.js.org) for templating and `Bun.markdown.html()` for Markdown rendering. Zero external runtime dependencies except Vento itself.
+Bolota uses **JavaScript/TypeScript** for templating and `Bun.markdown.html()` for Markdown rendering. Zero external runtime dependencies.

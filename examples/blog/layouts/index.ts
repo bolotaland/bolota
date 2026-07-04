@@ -1,9 +1,12 @@
+import { escapeHTML } from "../../../src/core/html.ts";
+
+export default ({ title, content }: { title: string; content: string }) => `
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{{ title }} — Bolota Blog</title>
+  <title>${escapeHTML(title)} — Bolota Blog</title>
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
@@ -13,8 +16,8 @@
       <nav>
         <ul class="site-nav">
           <li><a href="/">Home</a></li>
-          <li><a href="{{ '/about' |> url }}">About</a></li>
-          <li><a href="{{ '/projects' |> url }}">Projects</a></li>
+          <li><a href="/about/">About</a></li>
+          <li><a href="/projects/">Projects</a></li>
         </ul>
       </nav>
     </div>
@@ -22,7 +25,7 @@
 
   <div class="page">
     <main>
-      {{ content }}
+      ${content}
     </main>
   </div>
 
@@ -31,3 +34,4 @@
   </footer>
 </body>
 </html>
+`;

@@ -3,8 +3,9 @@
 import { loadConfig } from "../core/config.ts";
 import { Site } from "../core/site.ts";
 import { transformMarkdown } from "../plugins/markdown.ts";
-import { applyLayout, createVentoEnv } from "../plugins/vento.ts";
+import { applyLayout } from "../plugins/templates.ts";
 import { copyAssets } from "../plugins/assets.ts";
+import { copyColocatedAssets } from "../plugins/colocated.ts";
 import { createDevServer } from "../plugins/server.ts";
 import { startWatcher } from "../plugins/watcher.ts";
 
@@ -38,24 +39,27 @@ async function main(): Promise<void> {
 
   const { config, data: siteData } = await loadConfig();
   const site = new Site(config, process.cwd(), siteData);
-  const ventoEnv = createVentoEnv(config);
 
   // Register built-in plugins
   site.use({
     name: "markdown",
-    transform(page) {
-      return transformMarkdown(page);
+    async transform(page, site) {
+      return transformMarkdown(page, site);
     },
   });
 
   site.use({
-    name: "vento",
-    buildStart() {
-      // Ensure layout changes are picked up on every build (watch mode).
-      ventoEnv.cache.clear();
-    },
+    name: "templates",
     async transform(page, site) {
-      return applyLayout(page, site, ventoEnv);
+      return applyLayout(page, site);
+    },
+  });
+
+  site.use({
+    name: "colocated",
+    async transform(page, site) {
+      await copyColocatedAssets(page, config, site.cwd);
+      return page;
     },
   });
 

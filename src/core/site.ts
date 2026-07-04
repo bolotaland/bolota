@@ -4,6 +4,8 @@ import type { BolotaConfig } from "./config.ts";
 import type { Page } from "./pages.ts";
 import { discoverPages } from "./pages.ts";
 import { SiteData } from "./data.ts";
+import { buildCollections, type Collections } from "./collections.ts";
+import { buildSections, type Section } from "./sections.ts";
 
 /** Plugin interface for extending the build pipeline */
 export interface Plugin {
@@ -23,6 +25,8 @@ export class Site {
   private plugins: Plugin[] = [];
   readonly cwd: string;
   readonly data: SiteData;
+  collections: Collections = { all: [] };
+  sections: Map<string, Section> = new Map();
 
   constructor(
     config: BolotaConfig,
@@ -67,6 +71,8 @@ export class Site {
     }
 
     const pages = await discoverPages(this.config);
+    this.collections = buildCollections(pages);
+    this.sections = buildSections(pages);
     this.pages.length = 0;
 
     for (const page of pages) {

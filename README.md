@@ -1,8 +1,8 @@
 # Bolota
 
-A minimal static site generator (SSG) powered by [Bun](https://bun.sh) and vanilla TypeScript. Built to explore Bun's native APIs while remaining fully functional and pleasant to use.
+A minimal static site generator (SSG) powered by [Bun](https://bun.com) and vanilla TypeScript. Zero runtime dependencies, file-driven, and designed to stay simple while remaining powerful.
 
-> **Inspirations**: [Lume](https://lume.land) · [Eleventy](https://www.11ty.dev) · [Hugo](https://gohugo.io)
+> **Inspirations**: [Lume](https://lume.land) · [Eleventy](https://www.11ty.dev) · [Hugo](https://gohugo.io) · [Zola](https://getzola.org)
 
 ---
 
@@ -11,16 +11,20 @@ A minimal static site generator (SSG) powered by [Bun](https://bun.sh) and vanil
 | Feature | Details |
 |---|---|
 | **Content** | Markdown files (`.md`, `.markdown`) with YAML/TOML frontmatter |
-| **Templating** | [Vento](https://vento.js.org) `.vto` templates with autoescape |
-| **Layouts** | Reusable templates in `layouts/` |
+| **Templating** | Native **JavaScript/TypeScript** layouts — no external template engine |
+| **Layouts** | Convention-based defaults (`page`, `section`, `index`, `404`) + explicit `layout:` override |
 | **Pretty URLs** | `content/about.md` → `_site/about/index.html` → `/about/` |
-| **Assets** | Auto-copy `public/` → `_site/` (skipped if absent) |
+| **Data cascade** | `config.site` → global data → scoped data → `_data.*` files → frontmatter |
+| **Collections** | Group pages automatically with `tags: [post]` |
+| **Sections** | `content/blog/_index.md` becomes a section with `section.pages` |
+| **Assets** | `public/` copied as-is + co-located assets next to content |
+| **Internal links** | `[About](@/about.md)` resolves to `/about/` at build time |
+| **Shortcodes** | `{{ youtube(id="abc") }}` calls `layouts/shortcodes/youtube.ts` |
+| **Render hooks** | Customize `<img>`, `<a>`, and `<h*>` via `layouts/_markup/` |
 | **Dev server** | `Bun.serve()` with SSE live-reload |
 | **Watch mode** | Auto-rebuild on content, layout, or asset changes |
-| **URL helper** | Built-in Vento filter for consistent internal links |
-| **Auto-trim** | Optional Vento plugin to clean whitespace around control tags |
 | **Zero config** | Sensible defaults out of the box |
-| **Type-safe** | Strict TypeScript throughout |
+| **Zero dependencies** | Only Bun and TypeScript |
 
 ---
 
@@ -38,7 +42,7 @@ cd bolota
 bun install
 ```
 
-> **Dependencies**: `ventojs` (template engine) + `@types/bun` (dev). That's it.
+> **Dependencies**: none at runtime. Only `@types/bun` (dev) and TypeScript (peer).
 
 ### Run the example blog
 
@@ -60,12 +64,25 @@ my-site/
 ├── content/              # Markdown content files
 │   ├── index.md
 │   ├── about.md
-│   └── projects.md
-├── layouts/              # Vento templates
-│   ├── base.vto
-│   ├── post.vto
-│   └── projects.vto
-└── public/               # Static assets (CSS, images, fonts, etc.)
+│   ├── 404.md
+│   └── blog/
+│       ├── _index.md     # Section landing page
+│       ├── first-post.md
+│       └── second-post/
+│           ├── index.md
+│           └── hero.png  # Co-located asset
+├── layouts/              # JS/TS layout functions
+│   ├── page.ts           # Default layout for regular pages
+│   ├── index.ts          # Homepage layout
+│   ├── section.ts        # Section layout
+│   ├── 404.ts            # 404 layout
+│   ├── base.ts           # Custom layout
+│   ├── shortcodes/       # Shortcode functions
+│   │   └── youtube.ts
+│   └── _markup/          # Render hooks
+│       ├── render-image.ts
+│       └── render-heading.ts
+└── public/               # Static assets copied as-is
     └── style.css
 ```
 
@@ -76,8 +93,15 @@ _site/
 ├── index.html
 ├── about/
 │   └── index.html
-├── projects/
+├── 404/
 │   └── index.html
+├── blog/
+│   ├── index.html
+│   ├── first-post/
+│   │   └── index.html
+│   └── second-post/
+│       ├── index.html
+│       └── hero.png
 └── style.css
 ```
 
@@ -89,7 +113,7 @@ _site/
 flowchart TD
     A[content/*.md] --> B[discoverPages]
     C[_data.*] --> B
-    B --> D[Page object<br/>frontmatter + shared data]
+    B --> D[Page object<br/>frontmatter + shared data + headings + date]
 
     E[bolota.config.ts] --> F[loadConfig]
     F --> G[Site]
@@ -97,16 +121,23 @@ flowchart TD
     H --> D
 
     D --> I[Markdown plugin]
-    I --> J[HTML body]
-    J --> K[Vento plugin]
-    L[layouts/*.vto] --> K
-    K --> M[Final HTML page]
+    J[shortcodes] --> I
+    K[@/ links] --> I
+    L[render hooks] --> I
+    I --> M[HTML body]
 
-    M --> N[Bun.write]
-    O[public/] --> P[Assets plugin]
-    P --> N
+    M --> N[Templates plugin]
+    O[layouts/*.ts] --> N
+    P[collections] --> N
+    Q[section.pages] --> N
+    N --> R[Final HTML page]
 
-    N --> Q[_site/]
+    R --> S[Bun.write]
+    T[public/] --> U[Assets plugin]
+    V[co-located assets] --> U
+    U --> S
+
+    S --> W[_site/]
 ```
 
 ---
@@ -160,12 +191,22 @@ const config: BolotaConfig = {
     tables: true,
     autolinks: true,
   },
-  vento: {
-    autoTrim: true,
-  },
 };
 
 export default config;
+```
+
+Or export a function to register global data:
+
+```ts
+export default function (site) {
+  site.data("year", 2026);
+  site.data("layout", "post", "posts"); // scoped to posts/
+
+  return {
+    port: 3000,
+  };
+}
 ```
 
 ### Available options
@@ -174,15 +215,14 @@ export default config;
 |---|---|---|---|
 | `srcDir` | `string` | `"."` | Root directory for source files |
 | `contentDir` | `string` | `"content"` | Directory containing Markdown pages |
-| `layoutsDir` | `string` | `"layouts"` | Directory containing Vento templates |
+| `layoutsDir` | `string` | `"layouts"` | Directory containing JS/TS layouts |
 | `publicDir` | `string` | `"public"` | Directory containing static assets |
 | `outDir` | `string` | `"_site"` | Output directory for the generated site |
 | `port` | `number` | `3000` | Port for the development server |
 | `site` | `Record<string, unknown>` | `{}` | Global metadata available in all templates |
-| `data` | `Record<string, unknown>` | `{}` | Global data available in all pages, layouts and components |
+| `data` | `Record<string, unknown>` | `{}` | Global data available in all pages and layouts |
 | `scopedData` | `Record<string, Record<string, unknown>>` | `{}` | Data scoped to a directory or file path |
 | `markdownOptions` | `object` | — | Options passed to `Bun.markdown.html()` |
-| `vento.autoTrim` | `boolean \| { tags: string[] }` | `false` | Enable the Vento autoTrim plugin |
 
 ### Markdown options
 
@@ -199,6 +239,109 @@ markdownOptions: {
 ```
 
 See the [Bun Markdown API docs](https://bun.sh/docs/api/markdown) for the full list of options.
+
+---
+
+## 📝 Content
+
+Content files live in `content/` and use Markdown with frontmatter.
+
+### Frontmatter
+
+Bolota supports three frontmatter delimiters:
+
+**YAML** (recommended):
+
+```md
+---
+title: Welcome
+date: 2024-01-15
+tags: [post]
+---
+
+# Welcome
+
+Content here.
+```
+
+**TOML** with explicit marker:
+
+```md
+---toml
+title = "Welcome"
+date = 2024-01-15
+tags = ["post"]
+---
+
+# Welcome
+```
+
+**Legacy TOML**:
+
+```md
++++
+title = "Welcome"
+date = 2024-01-15
+tags = ["post"]
++++
+
+# Welcome
+```
+
+### Special frontmatter keys
+
+| Key | Description |
+|---|---|
+| `title` | Page title, available in layouts |
+| `layout` | Explicit layout name (overrides convention) |
+| `date` | Publication date, also inferred from `YYYY-MM-DD-slug.md` |
+| `tags` | Tags for collections |
+| `sort_by` | Section sort order: `"date"`, `"weight"`, or `"name"` |
+| `excludeFromCollections` | Set to `true` to omit from `collections.all` |
+
+### Pretty URLs
+
+By default, Bolota generates pretty URLs:
+
+| Source file | Output file | Public URL |
+|---|---|---|
+| `content/index.md` | `_site/index.html` | `/` |
+| `content/about.md` | `_site/about/index.html` | `/about/` |
+| `content/blog/post.md` | `_site/blog/post/index.html` | `/blog/post/` |
+| `content/blog/_index.md` | `_site/blog/index.html` | `/blog/` |
+
+### Sections
+
+A file named `_index.md` inside a directory becomes a **section** landing page. It has access to `section.pages`, the list of regular pages in the same directory.
+
+```md
+---
+title: Blog
+sort_by: date
+---
+
+# Blog
+
+Welcome to the blog.
+```
+
+```ts
+// layouts/section.ts
+import { escapeHTML } from "bolota/html";
+
+export default ({ title, section, content }) => `
+  <h1>${escapeHTML(title)}</h1>
+  ${content}
+  <ul>
+    ${section.pages.map((post) => `
+      <li>
+        <a href="${post.url}">${escapeHTML(post.frontmatter.title as string)}</a>
+        <time>${post.date ? post.date.toISOString().slice(0, 10) : ""}</time>
+      </li>
+    `).join("")}
+  </ul>
+`;
+```
 
 ---
 
@@ -225,9 +368,16 @@ title: Home
 
 Available in layouts:
 
-```vto
-<p>By {{ author }}</p>
-{{ content |> safe }}
+```ts
+// layouts/base.ts
+import { escapeHTML } from "bolota/html";
+
+export default ({ author, content }) => `
+  <html>
+    <p>By ${escapeHTML(author)}</p>
+    ${content}
+  </html>
+`;
 ```
 
 ### Global data (`site.data()`)
@@ -272,134 +422,65 @@ From lowest to highest priority:
 
 ---
 
-## 📝 Content
-
-Content files live in `content/` and use Markdown with frontmatter.
-
-### Frontmatter
-
-Bolota supports three frontmatter delimiters:
-
-**YAML** (recommended):
-
-```md
----
-title: Welcome
-layout: base
----
-
-# Welcome
-
-Content here.
-```
-
-**TOML** with explicit marker:
-
-```md
----toml
-title = "Welcome"
-layout = "base"
----
-
-# Welcome
-```
-
-**Legacy TOML**:
-
-```md
-+++
-title = "Welcome"
-layout = "base"
-+++
-
-# Welcome
-```
-
-### Special frontmatter keys
-
-| Key | Description |
-|---|---|
-| `title` | Page title, typically used in the `<title>` tag |
-| `layout` | Name of the Vento layout to use (without `.vto` extension) |
-| `date` | Publication date, available in templates |
-
-Any other frontmatter key is passed as a variable to the layout.
-
-### Pretty URLs
-
-By default, Bolota generates pretty URLs:
-
-| Source file | Output file | Public URL |
-|---|---|---|
-| `content/index.md` | `_site/index.html` | `/` |
-| `content/about.md` | `_site/about/index.html` | `/about/` |
-| `content/blog/post.md` | `_site/blog/post/index.html` | `/blog/post/` |
-
----
-
 ## 🎨 Layouts and templates
 
-Layouts are [Vento](https://vento.js.org) templates stored in `layouts/`.
+Layouts are **JavaScript/TypeScript functions** stored in `layouts/`. They receive a data object and return an HTML string.
 
 ### Basic layout
 
-```html
-<!-- layouts/base.vto -->
+```ts
+// layouts/base.ts
+import { escapeHTML, url } from "bolota/html";
+
+export default ({ title, content, site, page }) => `
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>{{ title }} — My Site</title>
-  <link rel="stylesheet" href="/style.css">
+  <title>${escapeHTML(title)} — ${escapeHTML(site?.name ?? "")}</title>
+  <link rel="stylesheet" href="${url("/style.css")}">
 </head>
 <body>
-  {{ content |> safe }}
+  ${content}
 </body>
 </html>
+`;
 ```
 
-> **Important**: because `autoescape` is enabled, raw HTML content must be piped through the `safe` filter: `{{ content |> safe }}`.
+> **Important**: layout authors control HTML escaping. Use `Bun.escapeHTML` or import `escapeHTML` from `bolota/html` for user-facing variables. `content` is already rendered HTML and should be inserted as-is.
+
+### Convention-based default layouts
+
+Bolota picks a layout automatically based on the page:
+
+| Page | Default layout file |
+|---|---|
+| `content/index.md` | `layouts/index.ts` |
+| `content/404.md` | `layouts/404.ts` |
+| `content/dir/_index.md` | `layouts/section.ts` |
+| Any other page | `layouts/page.ts` |
+
+Use the frontmatter `layout:` key to override:
+
+```md
+---
+layout: base
+---
+```
 
 ### Built-in helpers
 
-#### `url` filter
-
-Use the `url` filter to generate consistent internal links:
-
-```html
-<a href="{{ '/about' |> url }}">About</a>
-<a href="{{ '/projects' |> url }}">Projects</a>
-```
-
-The filter converts:
-- `/about` → `/about/`
-- `/about.html` → `/about/`
-- `./about.html` → `/about/`
-- Absolute URLs and anchors are left untouched
-
-#### Auto-trim
-
-Vento's `autoTrim` plugin removes the blank lines and indentation around control-flow tags (`if`, `for`, `set`, etc.). It is **disabled by default** to keep output predictable.
-
-Enable it with a boolean:
+Import helpers from `bolota/html`:
 
 ```ts
-vento: {
-  autoTrim: true,
-}
+import { escapeHTML, url, slugify, safe, toHTML } from "bolota/html";
 ```
 
-Or customize which tags are trimmed:
-
-```ts
-import { defaultTags } from "ventojs/plugins/auto_trim.js";
-
-vento: {
-  autoTrim: {
-    tags: ["if", "for", "set", ...defaultTags],
-  },
-}
-```
+- `escapeHTML(value)` — escape HTML special characters
+- `url(path)` — normalize internal URLs (`/about` → `/about/`)
+- `slugify(text)` — create URL-safe slugs
+- `safe(html)` — mark an HTML string as safe
+- `toHTML(value)` — escape unless safe
 
 ### Template data
 
@@ -408,33 +489,156 @@ Inside a layout, you have access to:
 | Variable | Description |
 |---|---|
 | `content` | The rendered HTML body of the page |
-| `page` | The full `Page` object (`page.url`, `page.outputPath`, etc.) |
+| `page` | The full `Page` object (`page.url`, `page.date`, `page.headings`, etc.) |
 | `site` | Global metadata from `bolota.config.ts` |
+| `collections` | Tag-based collections (`collections.all`, `collections.post`, …) |
+| `section` | Section data (only for `_index.md` pages) |
 | All frontmatter keys | `title`, `date`, `layout`, and any custom fields |
 
 Example:
 
-```html
-<h1>{{ title }}</h1>
-<p>Published on {{ date }}</p>
-{{ content |> safe }}
-
-<footer>
-  <p>{{ site.name }}</p>
-</footer>
+```ts
+export default ({ title, page, content }) => `
+  <h1>${Bun.escapeHTML(title)}</h1>
+  <nav>
+    ${page.headings.map(h => `<a href="#${h.slug}">${Bun.escapeHTML(h.text)}</a>`).join("")}
+  </nav>
+  ${content}
+`;
 ```
 
-### Includes
+### Partials
 
-Vento's `include` tag works out of the box. Place reusable partials in `layouts/` and include them:
+Because layouts are plain JS/TS modules, partials are just imports:
 
-```html
-{{ include "partials/header.vto" }}
+```ts
+// layouts/partials/footer.ts
+export default ({ site }) => `<footer>© ${new Date().getFullYear()} ${site?.name}</footer>`;
+```
+
+```ts
+// layouts/base.ts
+import footer from "./partials/footer.ts";
+
+export default (data) => `
+  <html>
+    <body>
+      ${data.content}
+      ${footer(data)}
+    </body>
+  </html>
+`;
 ```
 
 ---
 
-## 🖼️ Static assets
+## 🏷️ Collections
+
+Group pages with the `tags` frontmatter key:
+
+```md
+---
+title: Hello
+tags: [post]
+---
+# Hello
+```
+
+In a layout:
+
+```ts
+import { escapeHTML } from "bolota/html";
+
+export default ({ collections, content }) => `
+  ${content}
+  <h2>Recent posts</h2>
+  <ul>
+    ${collections.post.map(post => `
+      <li><a href="${post.url}">${escapeHTML(post.frontmatter.title as string)}</a></li>
+    `).join("")}
+  </ul>
+`;
+```
+
+- `collections.all` contains every page (except those with `excludeFromCollections: true`).
+- `collections.post` contains pages tagged `post`.
+
+---
+
+## 🧩 Shortcodes
+
+Shortcodes extend Markdown without raw HTML. Create `layouts/shortcodes/{name}.ts`:
+
+```ts
+// layouts/shortcodes/youtube.ts
+import { escapeHTML } from "bolota/html";
+
+export default ({ id, className }) => `
+  <iframe class="${escapeHTML(className ?? "")}" src="https://www.youtube.com/embed/${escapeHTML(id)}"></iframe>
+`;
+```
+
+Use in Markdown:
+
+```md
+{{ youtube(id="dQw4w9WgXcQ", className="video") }}
+```
+
+Supported argument types: strings, numbers, booleans.
+
+---
+
+## 🪝 Render hooks
+
+Customize Markdown-to-HTML output with hooks in `layouts/_markup/`:
+
+```ts
+// layouts/_markup/render-image.ts
+import { escapeHTML } from "bolota/html";
+
+export default ({ src, alt }) => `
+  <figure>
+    <img src="${escapeHTML(src)}" alt="${escapeHTML(alt)}" loading="lazy">
+    <figcaption>${escapeHTML(alt)}</figcaption>
+  </figure>
+`;
+```
+
+Available hooks:
+
+| Hook | File | Data |
+|---|---|---|
+| Images | `render-image.ts` | `{ src, alt, title? }` |
+| Links | `render-link.ts` | `{ href, text, title? }` |
+| Headings | `render-heading.ts` | `{ depth, text, slug }` |
+
+---
+
+## 🔗 Internal links
+
+Use `@/` links to reference other Markdown files. They are resolved to pretty URLs at build time:
+
+```md
+[About](@/about.md)
+[Blog](@/blog/_index.md)
+[Post](@/blog/post.md)
+```
+
+Becomes:
+
+```html
+<a href="/about/">About</a>
+<a href="/blog/">Blog</a>
+<a href="/blog/post/">Post</a>
+```
+
+This keeps links robust even if URLs change.
+
+---
+
+## 🖼️ Static and co-located assets
+
+### `public/` directory
 
 Files in `public/` are copied as-is to `_site/`. Use this for:
 
@@ -445,11 +649,25 @@ Files in `public/` are copied as-is to `_site/`. Use this for:
 - Downloadable files
 - `robots.txt`, `favicon.ico`, etc.
 
-Example:
-
 ```
 public/style.css   →   _site/style.css
 public/logo.png    →   _site/logo.png
+```
+
+### Co-located assets
+
+Keep assets next to the content that uses them:
+
+```
+content/blog/post/
+├── index.md
+└── hero.png
+```
+
+`hero.png` is copied to `_site/blog/post/hero.png`, so Markdown can use a relative link:
+
+```md
+![Hero](hero.png)
 ```
 
 If your project doesn't need a `public/` directory, Bolota skips the copy step automatically.
@@ -484,7 +702,7 @@ bun run ../../src/cli/index.ts build
 - **Runtime**: Bun (JavaScriptCore)
 - **Language**: Strict TypeScript, native ESM
 - **Markdown**: `Bun.markdown.html()` — Bun's native parser
-- **Templating**: [Vento](https://vento.js.org)
+- **Templating**: Native JavaScript/TypeScript functions
 - **File I/O**: `Bun.file`, `Bun.write`, `Bun.Glob`
 - **Server**: `Bun.serve` with SSE live-reload
 - **Tests**: `bun:test`

@@ -1,6 +1,6 @@
 ---
 title: About
-layout: post
+layout: page
 date: 2025-01-15
 ---
 
@@ -10,7 +10,7 @@ Bolota is a minimal static site generator (SSG) built with **Bun** and **TypeScr
 
 ## Design Goals
 
-- **Zero bloat**: Only one external dependency (`ventojs`)
+- **Zero runtime dependencies**: No external template engine, no lockfile bloat
 - **Native Bun APIs**: File I/O, globbing, server, Markdown parser
 - **Type-safe**: Strict TypeScript throughout
 - **Pleasant developer experience**: Live-reload dev server, clean code
@@ -28,7 +28,7 @@ Bolota draws inspiration from:
 | Feature | Implementation |
 |---|---|
 | Content | Markdown with YAML/TOML frontmatter |
-| Templating | Vento (`{{ }}`, `{{ if }}`, `{{ for }}`) |
-| Layouts | Reusable `.vto` templates |
-| Assets | Auto-copy from `public/` |
+| Templating | Native JavaScript/TypeScript functions |
+| Layouts | Reusable `.ts` layout modules |
+| Assets | Auto-copy from `public/` and co-located assets |
 | Dev server | `Bun.serve()` with SSE live-reload |
