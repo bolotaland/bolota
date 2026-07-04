@@ -2,6 +2,7 @@
 
 import { join } from "node:path";
 import vento from "ventojs";
+import autoTrim, { defaultTags } from "ventojs/plugins/auto_trim.js";
 import type { Page } from "../core/pages.ts";
 import type { BolotaConfig } from "../core/config.ts";
 
@@ -39,6 +40,15 @@ export function createVentoEnv(config: BolotaConfig): VentoEnvironment {
   });
 
   env.filters.url = normalizeUrl;
+
+  if (config.vento?.autoTrim) {
+    const tags =
+      typeof config.vento.autoTrim === "object" &&
+      Array.isArray(config.vento.autoTrim.tags)
+        ? config.vento.autoTrim.tags
+        : defaultTags;
+    env.use(autoTrim({ tags }));
+  }
 
   return env;
 }

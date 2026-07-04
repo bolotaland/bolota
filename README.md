@@ -18,6 +18,7 @@ A minimal static site generator (SSG) powered by [Bun](https://bun.sh) and vanil
 | **Dev server** | `Bun.serve()` with SSE live-reload |
 | **Watch mode** | Auto-rebuild on content, layout, or asset changes |
 | **URL helper** | Built-in Vento filter for consistent internal links |
+| **Auto-trim** | Optional Vento plugin to clean whitespace around control tags |
 | **Zero config** | Sensible defaults out of the box |
 | **Type-safe** | Strict TypeScript throughout |
 
@@ -131,6 +132,9 @@ const config: BolotaConfig = {
     tables: true,
     autolinks: true,
   },
+  vento: {
+    autoTrim: true,
+  },
 };
 
 export default config;
@@ -148,6 +152,7 @@ export default config;
 | `port` | `number` | `3000` | Port for the development server |
 | `site` | `Record<string, unknown>` | `{}` | Global metadata available in all templates |
 | `markdownOptions` | `object` | — | Options passed to `Bun.markdown.html()` |
+| `vento.autoTrim` | `boolean \| { tags: string[] }` | `false` | Enable the Vento autoTrim plugin |
 
 ### Markdown options
 
@@ -271,6 +276,30 @@ The filter converts:
 - `/about.html` → `/about/`
 - `./about.html` → `/about/`
 - Absolute URLs and anchors are left untouched
+
+#### Auto-trim
+
+Vento's `autoTrim` plugin removes the blank lines and indentation around control-flow tags (`if`, `for`, `set`, etc.). It is **disabled by default** to keep output predictable.
+
+Enable it with a boolean:
+
+```ts
+vento: {
+  autoTrim: true,
+}
+```
+
+Or customize which tags are trimmed:
+
+```ts
+import { defaultTags } from "ventojs/plugins/auto_trim.js";
+
+vento: {
+  autoTrim: {
+    tags: ["if", "for", "set", ...defaultTags],
+  },
+}
+```
 
 ### Template data
 

@@ -25,6 +25,11 @@ export interface MarkdownOptions {
 /**
  * Bolota configuration schema.
  */
+export interface VentoConfig {
+  /** Enable the Vento autoTrim plugin. Disabled by default. */
+  autoTrim?: boolean | { tags?: string[] };
+}
+
 export interface BolotaConfig {
   /** Root directory for source content */
   srcDir: string;
@@ -42,6 +47,8 @@ export interface BolotaConfig {
   site?: Record<string, unknown>;
   /** Options for Bun.markdown.html() */
   markdownOptions?: MarkdownOptions;
+  /** Vento engine options */
+  vento?: VentoConfig;
 }
 
 /** Default configuration used when no user config is provided */
@@ -74,6 +81,7 @@ function sanitizeConfig(
       ...(user.site ?? {}),
     },
     markdownOptions: user.markdownOptions ?? base.markdownOptions,
+    vento: user.vento ?? base.vento,
   };
 }
 
