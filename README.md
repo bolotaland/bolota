@@ -111,33 +111,33 @@ _site/
 
 ```mermaid
 flowchart TD
-    A[content/*.md] --> B[discoverPages]
-    C[_data.*] --> B
-    B --> D[Page object<br/>frontmatter + shared data + headings + date]
+    A["content/*.md"] --> B[discoverPages]
+    C["_data.*"] --> B
+    B --> D["Page object<br>frontmatter + shared data + headings + date"]
 
-    E[bolota.config.ts] --> F[loadConfig]
+    E["bolota.config.ts"] --> F[loadConfig]
     F --> G[Site]
-    G --> H[Global / scoped data]
+    G --> H["Global / scoped data"]
     H --> D
 
-    D --> I[Markdown plugin]
+    D --> I["Markdown plugin"]
     J[shortcodes] --> I
-    K[@/ links] --> I
-    L[render hooks] --> I
-    I --> M[HTML body]
+    K["@/ links"] --> I
+    L["render hooks"] --> I
+    I --> M["HTML body"]
 
-    M --> N[Templates plugin]
-    O[layouts/*.ts] --> N
+    M --> N["Templates plugin"]
+    O["layouts/*.ts"] --> N
     P[collections] --> N
-    Q[section.pages] --> N
-    N --> R[Final HTML page]
+    Q["section.pages"] --> N
+    N --> R["Final HTML page"]
 
     R --> S[Bun.write]
-    T[public/] --> U[Assets plugin]
-    V[co-located assets] --> U
+    T["public/"] --> U["Assets plugin"]
+    V["co-located assets"] --> U
     U --> S
 
-    S --> W[_site/]
+    S --> W["_site/"]
 ```
 
 ---
