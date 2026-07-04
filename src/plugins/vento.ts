@@ -5,18 +5,41 @@ import vento from "ventojs";
 import type { Page } from "../core/pages.ts";
 import type { BolotaConfig } from "../core/config.ts";
 
-type VentoEnvironment = ReturnType<typeof vento>;
+export type VentoEnvironment = ReturnType<typeof vento>;
 
-let env: VentoEnvironment | null = null;
+function normalizeUrl(path: string): string {
+  // Leave absolute URLs and anchors untouched.
+  if (/^[a-z][a-z0-9+.-]*:/i.test(path) || path.startsWith("#")) {
+    return path;
+  }
+
+  let normalized = path.replace(/\.html$/i, "");
+
+  if (!normalized.startsWith("/")) {
+    normalized = `/${normalized}`;
+  }
+
+  // Pretty-print page URLs: /about -> /about/
+  if (normalized.length > 1 && !normalized.includes(".") && !normalized.endsWith("/")) {
+    normalized = `${normalized}/`;
+  }
+
+  return normalized || "/";
+}
 
 /**
- * Initialize the Vento environment with the layouts directory.
+ * Create a fresh Vento environment configured for Bolota.
  */
-export function initVento(layoutsDir: string): VentoEnvironment {
-  env = vento({
+export function createVentoEnv(config: BolotaConfig): VentoEnvironment {
+  const layoutsDir = join(config.srcDir, config.layoutsDir);
+
+  const env = vento({
     includes: layoutsDir,
     autoescape: true,
   });
+
+  env.filters.url = normalizeUrl;
+
   return env;
 }
 
@@ -24,29 +47,30 @@ export function initVento(layoutsDir: string): VentoEnvironment {
  * Render a Vento template file.
  */
 export async function renderVentoFile(
+  env: VentoEnvironment,
   templatePath: string,
   data: Record<string, unknown>,
 ): Promise<string> {
-  const instance = env ?? vento({ autoescape: true });
-  const result = await instance.run(templatePath, data);
+  const result = await env.run(templatePath, data);
   return result.content;
 }
 
 /**
  * Wrap a page's body in its layout if one is specified in frontmatter.
  */
-export async function applyLayout(page: Page, config: BolotaConfig): Promise<Page> {
+export async function applyLayout(
+  page: Page,
+  config: BolotaConfig,
+  env: VentoEnvironment,
+): Promise<Page> {
   const layout = page.frontmatter.layout as string | undefined;
   if (!layout) {
     return page;
   }
 
   const layoutsDir = join(config.srcDir, config.layoutsDir);
-  if (!env) {
-    initVento(layoutsDir);
-  }
-
   const layoutPath = join(layoutsDir, `${layout}.vto`);
+
   const layoutData = {
     ...page.frontmatter,
     content: page.body,
@@ -55,7 +79,7 @@ export async function applyLayout(page: Page, config: BolotaConfig): Promise<Pag
   };
 
   try {
-    const html = await renderVentoFile(layoutPath, layoutData);
+    const html = await renderVentoFile(env, layoutPath, layoutData);
     return {
       ...page,
       body: html,

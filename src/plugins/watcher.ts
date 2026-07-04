@@ -9,7 +9,7 @@ import { broadcastReload } from "./server.ts";
 type WatcherCallback = () => Promise<void>;
 
 /**
- * Watch source and layout directories for changes and invoke a callback.
+ * Watch source, layout, and public directories for changes and invoke a callback.
  * Returns a cleanup function to stop watching.
  */
 export function watchFiles(
@@ -19,8 +19,9 @@ export function watchFiles(
 ): () => void {
   const srcDir = join(cwd, config.srcDir, config.contentDir);
   const layoutsDir = join(cwd, config.srcDir, config.layoutsDir);
+  const publicDir = join(cwd, config.srcDir, config.publicDir);
 
-  const watchedPaths = new Set([srcDir, layoutsDir]);
+  const watchedPaths = new Set([srcDir, layoutsDir, publicDir]);
   const watchers: ReturnType<typeof watch>[] = [];
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -33,7 +34,7 @@ export function watchFiles(
         const message = error instanceof Error ? error.message : String(error);
         console.error(`[watcher] Rebuild failed: ${message}`);
       });
-    }, 150);
+    }, 300);
   };
 
   for (const dir of watchedPaths) {
@@ -44,7 +45,7 @@ export function watchFiles(
         if (!filename) {
           return;
         }
-        const filenameStr = filename instanceof Buffer ? filename.toString() : filename;
+        const filenameStr = Buffer.isBuffer(filename) ? filename.toString() : filename;
         // Ignore hidden files and common temp files
         if (filenameStr.startsWith(".") || filenameStr.endsWith("~")) {
           return;
@@ -73,13 +74,21 @@ export function watchFiles(
 /**
  * Watch the site and rebuild on changes.
  */
-export function startWatcher(config: BolotaConfig, site: Site, cwd: string = process.cwd()): () => void {
-  const cleanup = watchFiles(config, async () => {
-    console.log("[watch] Rebuilding...");
-    await site.build();
-    broadcastReload();
-    console.log("[watch] Rebuild complete.");
-  }, cwd);
+export function startWatcher(
+  config: BolotaConfig,
+  site: Site,
+  cwd: string = process.cwd(),
+): () => void {
+  const cleanup = watchFiles(
+    config,
+    async () => {
+      console.log("[watch] Rebuilding...");
+      await site.build();
+      broadcastReload();
+      console.log("[watch] Rebuild complete.");
+    },
+    cwd,
+  );
 
   console.log(`[watch] Watching ${join(cwd, config.srcDir)} for changes...`);
   return cleanup;

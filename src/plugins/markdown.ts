@@ -6,9 +6,6 @@ import type { Page } from "../core/pages.ts";
  * Render raw Markdown content to HTML using Bun.markdown.html().
  */
 export function renderMarkdown(content: string): string {
-  if (typeof Bun !== "object" || !Bun.markdown) {
-    throw new Error("Bun.markdown is not available in this runtime.");
-  }
   try {
     return Bun.markdown.html(content);
   } catch (error: unknown) {
@@ -29,6 +26,5 @@ export function transformMarkdown(page: Page): Page {
   return {
     ...page,
     body: html,
-    outputPath: page.outputPath.replace(/\.md$/, ".html"),
   };
 }

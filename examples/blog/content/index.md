@@ -9,7 +9,7 @@ A minimal static site generator powered by [Bun](https://bun.sh) and vanilla Typ
 
 ## Latest Posts
 
-- [About Bolota](./about.html)
-- [Projects](./projects.html)
+- [About Bolota]({{ './about.html' |> url }})
+- [Projects]({{ './projects.html' |> url }})
 
 Bolota uses [Vento](https://vento.js.org) for templating and `Bun.markdown.html()` for Markdown rendering. Zero external runtime dependencies except Vento itself.

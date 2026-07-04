@@ -9,6 +9,8 @@ export interface Page {
   relativePath: string;
   /** Output path relative to the configured output directory */
   outputPath: string;
+  /** Public URL path (e.g. "about/" or "") */
+  url: string;
   /** Raw file content (including frontmatter) */
   rawContent: string;
   /** Parsed frontmatter metadata */
@@ -19,6 +21,19 @@ export interface Page {
   ext: string;
   /** Base name without extension */
   name: string;
+}
+
+function computeOutputPath(relativePath: string, ext: string): string {
+  const dirPath = relativePath.slice(0, -ext.length);
+  return dirPath.endsWith("index")
+    ? `${dirPath}.html`
+    : join(dirPath, "index.html");
+}
+
+function computeUrl(outputPath: string): string {
+  // "about/index.html" -> "about/"
+  // "index.html" -> ""
+  return outputPath.replace(/index\.html$/i, "");
 }
 
 /**
@@ -39,13 +54,14 @@ export async function discoverPages(config: BolotaConfig): Promise<Page[]> {
     const relativePath = relative(contentPath, filePath);
     const name = basename(filePath, ext);
 
-    const dirPath = relativePath.slice(0, -ext.length);
-    const outputPath = dirPath.endsWith("index") ? `${dirPath}.html` : join(dirPath, "index.html");
+    const outputPath = computeOutputPath(relativePath, ext);
+    const url = computeUrl(outputPath);
 
     pages.push({
       sourcePath: filePath,
       relativePath,
       outputPath,
+      url,
       rawContent,
       frontmatter,
       body,

@@ -1,12 +1,33 @@
 {
   "name": "bolota",
   "version": "0.1.0",
-  "module": "src/cli/index.ts",
+  "description": "A minimal static site generator powered by Bun and TypeScript",
   "type": "module",
+  "module": "src/cli/index.ts",
+  "main": "src/cli/index.ts",
+  "bin": {
+    "bolota": "src/cli/index.ts"
+  },
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "exports": {
+    ".": "./src/cli/index.ts",
+    "./config": "./src/core/config.ts",
+    "./site": "./src/core/site.ts",
+    "./pages": "./src/core/pages.ts"
+  },
+  "engines": {
+    "bun": ">=1.1.0"
+  },
   "scripts": {
     "build": "bun run src/cli/index.ts build",
     "serve": "bun run src/cli/index.ts serve",
-    "watch": "bun run src/cli/index.ts watch"
+    "watch": "bun run src/cli/index.ts watch",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
   },
   "dependencies": {
     "ventojs": "^2.3.1"
@@ -16,5 +37,6 @@
   },
   "peerDependencies": {
     "typescript": "^5.0.0"
-  }
+  },
+  "license": "MIT"
 }

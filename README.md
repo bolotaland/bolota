@@ -13,7 +13,7 @@ A minimal static site generator (SSG) powered by [Bun](https://bun.sh) and vanil
 | **Content** | `.md` files with YAML/TOML frontmatter |
 | **Templating** | [Vento](https://vento.js.org) `.vto` templates |
 | **Layouts** | Reusable templates in `layouts/` |
-| **Assets** | Auto-copy `public/` → `_site/` |
+| **Assets** | Auto-copy `public/` → `_site/` (skipped if absent) |
 | **Dev server** | `Bun.serve()` with SSE live-reload |
 | **Watch mode** | Auto-rebuild on file change |
 | **Zero config** | Sensible defaults out of the box |
@@ -24,7 +24,7 @@ A minimal static site generator (SSG) powered by [Bun](https://bun.sh) and vanil
 
 ### Prerequisites
 
-- [Bun](https://bun.sh) installed (v1.0+)
+- [Bun](https://bun.sh) installed (v1.1.0+)
 
 ### Installation
 
@@ -37,22 +37,27 @@ bun install
 
 ### Usage
 
+All CLI commands are designed to be run from inside a Bolota project directory (a folder containing `content/`, `layouts/`, etc.).
+
 ```bash
+# From a project directory, e.g. examples/blog
+cd examples/blog
+
 # Static build
-bun run build
+bun run ../../src/cli/index.ts build
 
 # Dev server with live-reload
-bun run serve
+bun run ../../src/cli/index.ts serve
 
-# Watch without server
-bun run watch
+# Watch with server
+bun run ../../src/cli/index.ts watch
 ```
 
 ### Example
 
 ```bash
 cd examples/blog
-bun run serve
+bun run ../../src/cli/index.ts serve
 # → http://localhost:3000
 ```
 
@@ -74,7 +79,7 @@ my-site/
 
 - **Runtime**: Bun (JavaScriptCore)
 - **Language**: Strict TypeScript, native ESM
-- **Markdown**: `Bun.markdown.html()` — native Zig parser
+- **Markdown**: `Bun.markdown.html()` — native parser
 - **Templating**: [Vento](https://vento.js.org)
 - **File I/O**: `Bun.file`, `Bun.write`, `Bun.Glob`
 - **Server**: `Bun.serve` with SSE live-reload

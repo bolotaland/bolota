@@ -1,8 +1,9 @@
 // Development server with live-reload via SSE
 
-import { join } from "node:path";
-import type { Server } from "bun";
+import { join, resolve, sep } from "node:path";
 import type { BolotaConfig } from "../core/config.ts";
+
+type BunServer = ReturnType<typeof Bun.serve>;
 
 interface LiveReloadClient {
   id: number;
@@ -42,6 +43,25 @@ export function broadcastReload(): void {
   }
 }
 
+function resolveOutputPath(
+  outputDir: string,
+  pathname: string,
+): { filePath: string; redirect?: string } {
+  const normalized = pathname.replace(/\.html$/i, "");
+
+  // If the request ends with .html, redirect to the pretty URL.
+  if (normalized !== pathname) {
+    const target = normalized === "" ? "/" : `${normalized}/`;
+    return { filePath: join(outputDir, normalized, "index.html"), redirect: target };
+  }
+
+  const filePath = pathname.endsWith("/")
+    ? join(outputDir, pathname, "index.html")
+    : join(outputDir, pathname);
+
+  return { filePath };
+}
+
 /**
  * Create a development server that serves the built site and injects
  * a live-reload script into HTML responses.
@@ -50,7 +70,7 @@ export function createDevServer(
   config: BolotaConfig,
   cwd: string = process.cwd(),
   options: { port?: number; liveReload?: boolean } = {},
-): { server: Server; stop: () => void } {
+): { server: BunServer; stop: () => Promise<void> } {
   const outputDir = join(cwd, config.outDir);
   const port = options.port ?? config.port;
   const enableLiveReload = options.liveReload ?? true;
@@ -81,28 +101,35 @@ export function createDevServer(
         });
       }
 
-      // Serve static files from the output directory
-      let filePath = join(outputDir, url.pathname);
-      if (url.pathname.endsWith("/")) {
-        filePath = join(filePath, "index.html");
+      const { filePath, redirect } = resolveOutputPath(outputDir, url.pathname);
+
+      // Prevent path traversal outside the output directory.
+      const resolvedFile = resolve(filePath);
+      const resolvedOutput = resolve(outputDir);
+      const isInside =
+        resolvedFile === resolvedOutput ||
+        resolvedFile.startsWith(`${resolvedOutput}${sep}`);
+      if (!isInside) {
+        return new Response("Forbidden", { status: 403 });
       }
 
       const file = Bun.file(filePath);
-      const exists = await file.exists();
-      if (!exists) {
+      if (!(await file.exists())) {
         return new Response("Not Found", { status: 404 });
       }
 
-      let content = await file.text();
+      // Redirect .html requests to their pretty URL before serving.
+      if (redirect) {
+        return new Response(null, { status: 301, headers: { Location: redirect } });
+      }
+
       const contentType = file.type;
 
-      // Inject live-reload script into HTML pages
-      if (
-        enableLiveReload &&
-        contentType.includes("text/html") &&
-        !content.includes("__livereload")
-      ) {
-        const script = `
+      // Only read HTML into memory for live-reload injection.
+      if (enableLiveReload && contentType.startsWith("text/html")) {
+        let content = await file.text();
+        if (!content.includes("__livereload")) {
+          const script = `
 <script>
 (function(){
   const es = new EventSource('/__livereload');
@@ -111,19 +138,22 @@ export function createDevServer(
 })();
 </script>
 `;
-        content = content.replace("</body>", `${script}</body>`);
+          content = content.replace("</body>", `${script}</body>`);
+        }
+        return new Response(content, {
+          headers: { "Content-Type": contentType },
+        });
       }
 
-      return new Response(content, {
-        headers: { "Content-Type": contentType },
-      });
+      // Stream non-HTML files directly from disk.
+      return new Response(file);
     },
   });
 
   return {
     server,
-    stop: () => {
-      server.stop();
+    stop: async () => {
+      await server.stop();
       clients.clear();
     },
   };
