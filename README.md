@@ -28,7 +28,7 @@ A minimal static site generator (SSG) powered by [Bun](https://bun.sh) and vanil
 
 ### Prerequisites
 
-- [Bun](https://bun.sh) installed (v1.1.0+)
+- [Bun](https://bun.com) installed (v1.3.14+)
 
 ### Installation
 
@@ -79,6 +79,34 @@ _site/
 ├── projects/
 │   └── index.html
 └── style.css
+```
+
+---
+
+## 🔄 How it works
+
+```mermaid
+flowchart TD
+    A[content/*.md] --> B[discoverPages]
+    C[_data.*] --> B
+    B --> D[Page object<br/>frontmatter + shared data]
+
+    E[bolota.config.ts] --> F[loadConfig]
+    F --> G[Site]
+    G --> H[Global / scoped data]
+    H --> D
+
+    D --> I[Markdown plugin]
+    I --> J[HTML body]
+    J --> K[Vento plugin]
+    L[layouts/*.vto] --> K
+    K --> M[Final HTML page]
+
+    M --> N[Bun.write]
+    O[public/] --> P[Assets plugin]
+    P --> N
+
+    N --> Q[_site/]
 ```
 
 ---
