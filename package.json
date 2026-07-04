@@ -1,0 +1,20 @@
+{
+  "name": "ignis",
+  "version": "0.1.0",
+  "module": "src/cli/index.ts",
+  "type": "module",
+  "scripts": {
+    "build": "bun run src/cli/index.ts build",
+    "serve": "bun run src/cli/index.ts serve",
+    "watch": "bun run src/cli/index.ts watch"
+  },
+  "dependencies": {
+    "ventojs": "^2.3.1"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  }
+}

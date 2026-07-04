@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ title }} — Ignis Blog</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="inner">
+      <a href="/" class="site-title">Ignis Blog</a>
+      <nav>
+        <ul class="site-nav">
+          <li><a href="/">Home</a></li>
+          <li><a href="/about.html">About</a></li>
+          <li><a href="/projects.html">Projects</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <div class="page">
+    <article>
+      {{ if date }}
+      <p class="post-meta">{{ date }}</p>
+      {{ /if }}
+      {{ content }}
+    </article>
+
+    <hr>
+    <p><a href="/">← Back to home</a></p>
+  </div>
+
+  <footer class="site-footer">
+    <p>Generated with <a href="https://github.com/normcore/ignis">Ignis</a></p>
+  </footer>
+</body>
+</html>

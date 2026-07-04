@@ -1,0 +1,6 @@
+[run]
+silent = true
+bun = true
+
+[install]
+saveTextLockfile = true
