@@ -1,4 +1,4 @@
-// CLI entry point for the Ignis static site generator
+// CLI entry point for the Bolota static site generator
 
 import { loadConfig } from "../core/config.ts";
 import { Site } from "../core/site.ts";

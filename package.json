@@ -1,5 +1,5 @@
 {
-  "name": "ignis",
+  "name": "bolota",
   "version": "0.1.0",
   "module": "src/cli/index.ts",
   "type": "module",

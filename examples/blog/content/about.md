@@ -4,9 +4,9 @@ layout: post
 date: 2025-01-15
 ---
 
-# About Ignis
+# About Bolota
 
-Ignis is a minimal static site generator (SSG) built with **Bun** and **TypeScript**. It was created as a style exercise to explore Bun's native APIs — `Bun.Glob`, `Bun.file`, `Bun.write`, `Bun.serve`, and `Bun.markdown`.
+Bolota is a minimal static site generator (SSG) built with **Bun** and **TypeScript**. It was created as a style exercise to explore Bun's native APIs — `Bun.Glob`, `Bun.file`, `Bun.write`, `Bun.serve`, and `Bun.markdown`.
 
 ## Design Goals
 
@@ -17,7 +17,7 @@ Ignis is a minimal static site generator (SSG) built with **Bun** and **TypeScri
 
 ## Inspirations
 
-Ignis draws inspiration from:
+Bolota draws inspiration from:
 
 - [Lume](https://lume.land) — Deno's SSG, elegant and simple
 - [Eleventy](https://www.11ty.dev) — JavaScript-based, flexible

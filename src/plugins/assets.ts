@@ -2,13 +2,13 @@
 
 import { join, relative, dirname } from "node:path";
 import { mkdir, writeFile } from "node:fs/promises";
-import type { IgnisConfig } from "../core/config.ts";
+import type { BolotaConfig } from "../core/config.ts";
 
 /**
  * Recursively copy the public directory into the output directory.
  * Uses node:fs/promises to avoid Bun.write side-effects.
  */
-export async function copyAssets(config: IgnisConfig, cwd: string = process.cwd()): Promise<void> {
+export async function copyAssets(config: BolotaConfig, cwd: string = process.cwd()): Promise<void> {
   const publicDir = join(cwd, config.srcDir, config.publicDir);
   const outputDir = join(cwd, config.outDir);
 

@@ -1,9 +1,9 @@
 import { join } from "node:path";
 
 /**
- * Ignis configuration schema.
+ * Bolota configuration schema.
  */
-export interface IgnisConfig {
+export interface BolotaConfig {
   /** Root directory for source content */
   srcDir: string;
   /** Directory containing page content (Markdown, etc.) */
@@ -21,7 +21,7 @@ export interface IgnisConfig {
 }
 
 /** Default configuration used when no user config is provided */
-export const defaultConfig: IgnisConfig = {
+export const defaultConfig: BolotaConfig = {
   srcDir: ".",
   contentDir: "content",
   layoutsDir: "layouts",
@@ -31,11 +31,11 @@ export const defaultConfig: IgnisConfig = {
 };
 
 /**
- * Load user configuration from `ignis.config.ts` in the current working directory.
+ * Load user configuration from `bolota.config.ts` in the current working directory.
  * Falls back to `defaultConfig` if no config file is found or if loading fails.
  */
-export async function loadConfig(cwd: string = process.cwd()): Promise<IgnisConfig> {
-  const configPath = join(cwd, "ignis.config.ts");
+export async function loadConfig(cwd: string = process.cwd()): Promise<BolotaConfig> {
+  const configPath = join(cwd, "bolota.config.ts");
   const configFile = Bun.file(configPath);
 
   if (!(await configFile.exists())) {
@@ -44,7 +44,7 @@ export async function loadConfig(cwd: string = process.cwd()): Promise<IgnisConf
 
   try {
     const module = await import(configPath);
-    const userConfig: Partial<IgnisConfig> = module.default ?? module;
+    const userConfig: Partial<BolotaConfig> = module.default ?? module;
 
     return {
       ...defaultConfig,

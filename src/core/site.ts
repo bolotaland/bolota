@@ -1,6 +1,6 @@
 import { join, dirname } from "node:path";
 import { mkdir, writeFile } from "node:fs/promises";
-import type { IgnisConfig } from "./config.ts";
+import type { BolotaConfig } from "./config.ts";
 import type { Page } from "./pages.ts";
 import { discoverPages } from "./pages.ts";
 
@@ -17,12 +17,12 @@ export interface Plugin {
 
 /** Core site builder that orchestrates the static generation pipeline */
 export class Site {
-  readonly config: IgnisConfig;
+  readonly config: BolotaConfig;
   readonly pages: Page[] = [];
   private plugins: Plugin[] = [];
   readonly cwd: string;
 
-  constructor(config: IgnisConfig, cwd: string = process.cwd()) {
+  constructor(config: BolotaConfig, cwd: string = process.cwd()) {
     this.config = config;
     this.cwd = cwd;
   }

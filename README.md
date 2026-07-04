@@ -1,4 +1,4 @@
-# Ignis
+# Bolota
 
 A minimal static site generator (SSG) powered by [Bun](https://bun.sh) and vanilla TypeScript. Built to explore Bun's native APIs while remaining fully functional and pleasant to use.
 
@@ -29,7 +29,7 @@ A minimal static site generator (SSG) powered by [Bun](https://bun.sh) and vanil
 ### Installation
 
 ```bash
-cd /Users/normcore/Code/ignis
+cd /Users/normcore/Code/bolota
 bun install
 ```
 
@@ -62,7 +62,7 @@ bun run serve
 
 ```
 my-site/
-├── ignis.config.ts      # Optional config
+├── bolota.config.ts      # Optional config
 ├── content/             # Markdown files
 ├── layouts/             # Vento .vto templates
 └── public/              # Static assets

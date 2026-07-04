@@ -1,6 +1,6 @@
 import { relative, basename, extname, join } from "node:path";
 import { parseFrontmatter } from "./frontmatter.ts";
-import type { IgnisConfig } from "./config.ts";
+import type { BolotaConfig } from "./config.ts";
 
 export interface Page {
   /** Absolute filesystem path to the source file */
@@ -25,7 +25,7 @@ export interface Page {
  * Discover all content pages in the content directory.
  * Uses `Bun.Glob` for fast recursive file scanning.
  */
-export async function discoverPages(config: IgnisConfig): Promise<Page[]> {
+export async function discoverPages(config: BolotaConfig): Promise<Page[]> {
   const pages: Page[] = [];
   const contentPath = join(config.srcDir, config.contentDir);
   const glob = new Bun.Glob("**/*.{md,markdown}");

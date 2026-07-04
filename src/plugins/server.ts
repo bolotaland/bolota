@@ -2,7 +2,7 @@
 
 import { join } from "node:path";
 import type { Server } from "bun";
-import type { IgnisConfig } from "../core/config.ts";
+import type { BolotaConfig } from "../core/config.ts";
 
 interface LiveReloadClient {
   id: number;
@@ -47,7 +47,7 @@ export function broadcastReload(): void {
  * a live-reload script into HTML responses.
  */
 export function createDevServer(
-  config: IgnisConfig,
+  config: BolotaConfig,
   cwd: string = process.cwd(),
   options: { port?: number; liveReload?: boolean } = {},
 ): { server: Server; stop: () => void } {

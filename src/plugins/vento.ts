@@ -3,7 +3,7 @@
 import { join } from "node:path";
 import vento from "ventojs";
 import type { Page } from "../core/pages.ts";
-import type { IgnisConfig } from "../core/config.ts";
+import type { BolotaConfig } from "../core/config.ts";
 
 type VentoEnvironment = ReturnType<typeof vento>;
 
@@ -35,7 +35,7 @@ export async function renderVentoFile(
 /**
  * Wrap a page's body in its layout if one is specified in frontmatter.
  */
-export async function applyLayout(page: Page, config: IgnisConfig): Promise<Page> {
+export async function applyLayout(page: Page, config: BolotaConfig): Promise<Page> {
   const layout = page.frontmatter.layout as string | undefined;
   if (!layout) {
     return page;

@@ -2,7 +2,7 @@
 
 import { watch } from "node:fs";
 import { join } from "node:path";
-import type { IgnisConfig } from "../core/config.ts";
+import type { BolotaConfig } from "../core/config.ts";
 import type { Site } from "../core/site.ts";
 import { broadcastReload } from "./server.ts";
 
@@ -13,7 +13,7 @@ type WatcherCallback = () => Promise<void>;
  * Returns a cleanup function to stop watching.
  */
 export function watchFiles(
-  config: IgnisConfig,
+  config: BolotaConfig,
   callback: WatcherCallback,
   cwd: string = process.cwd(),
 ): () => void {
@@ -73,7 +73,7 @@ export function watchFiles(
 /**
  * Watch the site and rebuild on changes.
  */
-export function startWatcher(config: IgnisConfig, site: Site, cwd: string = process.cwd()): () => void {
+export function startWatcher(config: BolotaConfig, site: Site, cwd: string = process.cwd()): () => void {
   const cleanup = watchFiles(config, async () => {
     console.log("[watch] Rebuilding...");
     await site.build();
