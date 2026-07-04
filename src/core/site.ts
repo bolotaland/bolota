@@ -1,4 +1,4 @@
-import { join } from "node:path";
+import { join, resolve, sep } from "node:path";
 import { rm } from "node:fs/promises";
 import type { BolotaConfig } from "./config.ts";
 import type { Page } from "./pages.ts";
@@ -27,6 +27,8 @@ export class Site {
   readonly data: SiteData;
   collections: Collections = { all: [] };
   sections: Map<string, Section> = new Map();
+  /** Per-build memoization (layouts, shortcodes, render hooks). Cleared at the start of every build. */
+  readonly buildCache = new Map<string, unknown>();
 
   constructor(
     config: BolotaConfig,
@@ -60,44 +62,75 @@ export class Site {
   /**
    * Run the full build pipeline.
    * Cleans the output directory, then discovers, transforms, and writes pages.
-   * Uses Bun.write for fast native file I/O.
+   *
+   * Each plugin's transform runs as a phase over all pages, so later phases
+   * (e.g. layouts) see the output of earlier ones (e.g. compiled Markdown)
+   * for every page — collections and sections are rebuilt between phases.
    */
   async build(): Promise<void> {
+    this.buildCache.clear();
     await this.cleanDestDir();
-    await this.data.loadSharedData(join(this.config.srcDir, this.config.contentDir));
+    await this.data.loadSharedData(resolve(this.cwd, this.config.srcDir, this.config.contentDir));
 
     for (const plugin of this.plugins) {
       if (plugin.buildStart) await plugin.buildStart(this);
     }
 
-    const pages = await discoverPages(this.config);
-    this.collections = buildCollections(pages);
-    this.sections = buildSections(pages);
-    this.pages.length = 0;
+    let pages = await discoverPages(this.config, this.cwd);
+    this.setPages(pages);
 
-    for (const page of pages) {
-      let currentPage: Page | null = page;
-
-      for (const plugin of this.plugins) {
-        if (plugin.transform && currentPage) {
-          currentPage = await plugin.transform(currentPage, this);
-        }
-      }
-
-      if (currentPage) {
-        this.pages.push(currentPage);
-        const outputPath = join(this.cwd, this.config.outDir, currentPage.outputPath);
-        await Bun.write(outputPath, currentPage.body);
-      }
+    for (const plugin of this.plugins) {
+      if (!plugin.transform) continue;
+      const results = await Promise.all(pages.map((page) => plugin.transform!(page, this)));
+      pages = results.filter((page): page is Page => page !== null);
+      this.setPages(pages);
     }
+
+    await this.writePages(pages);
 
     for (const plugin of this.plugins) {
       if (plugin.buildEnd) await plugin.buildEnd(this);
     }
   }
 
+  private setPages(pages: Page[]): void {
+    this.pages.length = 0;
+    this.pages.push(...pages);
+    this.collections = buildCollections(pages);
+    this.sections = buildSections(pages);
+  }
+
+  private async writePages(pages: Page[]): Promise<void> {
+    const outDir = resolve(this.cwd, this.config.outDir);
+    const byOutput = new Map<string, string>();
+
+    await Promise.all(pages.map((page) => {
+      const existing = byOutput.get(page.outputPath);
+      if (existing !== undefined) {
+        console.warn(
+          `[build] Output collision: "${page.relativePath}" and "${existing}" both write to "${page.outputPath}".`,
+        );
+      }
+      byOutput.set(page.outputPath, page.relativePath);
+      return Bun.write(join(outDir, page.outputPath), page.body);
+    }));
+  }
+
   private async cleanDestDir(): Promise<void> {
-    const dest = join(this.cwd, this.config.outDir);
+    const dest = resolve(this.cwd, this.config.outDir);
+    const projectRoot = resolve(this.cwd);
+    const contentDir = resolve(this.cwd, this.config.srcDir, this.config.contentDir);
+
+    // Refuse to delete the project itself or anything containing the content
+    // sources — a misconfigured outDir ("." or "..") must never wipe the site.
+    const contains = (parent: string, child: string): boolean =>
+      child === parent || child.startsWith(parent + sep);
+    if (contains(dest, projectRoot) || contains(dest, contentDir)) {
+      throw new Error(
+        `Refusing to clean outDir "${this.config.outDir}" (${dest}): it contains project sources.`,
+      );
+    }
+
     // Bun has no native recursive directory removal API, so node:fs/promises
     // is intentionally retained here.
     await rm(dest, { recursive: true, force: true });

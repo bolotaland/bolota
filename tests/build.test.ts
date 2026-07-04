@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "bun:test";
+import { describe, it, expect, beforeEach, afterEach, afterAll } from "bun:test";
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import { Site } from "../src/core/site.ts";
@@ -8,6 +8,10 @@ import { copyAssets } from "../src/plugins/assets.ts";
 import type { BolotaConfig } from "../src/core/config.ts";
 
 const tmpBase = join(import.meta.dir, "__tmp_build");
+
+afterAll(async () => {
+  await rm(tmpBase, { recursive: true, force: true });
+});
 
 const baseConfig: BolotaConfig = {
   srcDir: ".",

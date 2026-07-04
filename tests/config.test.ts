@@ -1,9 +1,13 @@
-import { describe, it, expect, beforeEach, afterEach } from "bun:test";
+import { describe, it, expect, beforeEach, afterEach, afterAll } from "bun:test";
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import { loadConfig, defaultConfig } from "../src/core/config.ts";
 
 const tmpBase = join(import.meta.dir, "__tmp_config");
+
+afterAll(async () => {
+  await rm(tmpBase, { recursive: true, force: true });
+});
 
 describe("loadConfig", () => {
   let tmpRoot: string;
@@ -41,5 +45,26 @@ describe("loadConfig", () => {
     const { config } = await loadConfig(tmpRoot);
     expect(config.srcDir).toBe(defaultConfig.srcDir);
     expect(config.port).toBe(defaultConfig.port);
+  });
+
+  it("loads bolota.config.js when no .ts config exists", async () => {
+    await Bun.write(
+      join(tmpRoot, "bolota.config.js"),
+      `export default { port: 4242 };`,
+    );
+    const { config } = await loadConfig(tmpRoot);
+    expect(config.port).toBe(4242);
+  });
+
+  it("throws on a broken config in strict mode, warns otherwise", async () => {
+    await Bun.write(
+      join(tmpRoot, "bolota.config.ts"),
+      `throw new Error("boom");`,
+    );
+
+    await expect(loadConfig(tmpRoot, { strict: true })).rejects.toThrow(/Failed to load config/);
+
+    const { config } = await loadConfig(tmpRoot);
+    expect(config).toEqual({ ...defaultConfig });
   });
 });

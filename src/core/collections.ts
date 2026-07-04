@@ -5,10 +5,19 @@ export interface Collections {
   [tag: string]: Page[];
 }
 
+/** Newest first; pages without a date keep discovery order at the end. */
+function byDateDesc(a: Page, b: Page): number {
+  if (a.date === undefined && b.date === undefined) return 0;
+  if (a.date === undefined) return 1;
+  if (b.date === undefined) return -1;
+  return b.date.getTime() - a.date.getTime();
+}
+
 /**
  * Build tag-based collections from a list of pages.
  * A page with `tags: ["post"]` is added to `collections.post`.
  * Pages can opt out with `excludeFromCollections: true`.
+ * Collections are sorted by date, newest first; undated pages come last.
  */
 export function buildCollections(pages: Page[]): Collections {
   const all: Page[] = [];
@@ -36,8 +45,11 @@ export function buildCollections(pages: Page[]): Collections {
     }
   }
 
+  all.sort(byDateDesc);
+
   const collections: Collections = { all };
   for (const [tag, list] of byTag) {
+    list.sort(byDateDesc);
     collections[tag] = list;
   }
 

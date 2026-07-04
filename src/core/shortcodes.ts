@@ -1,8 +1,11 @@
-import { join } from "node:path";
-import { pathToFileURL } from "node:url";
+import { join, resolve } from "node:path";
+import { importFresh } from "./modules.ts";
+import { splitCodeFences } from "./segments.ts";
 import type { Site } from "./site.ts";
 
 const SHORTCODE_REGEX = /\{\{\s*(\w+)\s*\(([^)]*)\)\s*\}\}/g;
+
+type ShortcodeFunction = (args: Record<string, unknown>) => string | Promise<string>;
 
 function parseArgs(argsString: string): Record<string, unknown> {
   const args: Record<string, unknown> = {};
@@ -19,7 +22,7 @@ function parseArgs(argsString: string): Record<string, unknown> {
       args[key] = true;
     } else if (value === "false") {
       args[key] = false;
-    } else if (/^-?\d+$/.test(value)) {
+    } else if (/^-?\d+(\.\d+)?$/.test(value)) {
       args[key] = Number(value);
     } else {
       args[key] = value;
@@ -29,30 +32,36 @@ function parseArgs(argsString: string): Record<string, unknown> {
   return args;
 }
 
-async function loadShortcode(site: Site, name: string): Promise<(args: Record<string, unknown>) => string | Promise<string>> {
-  const shortcodesDir = join(site.config.srcDir, site.config.layoutsDir, "shortcodes");
+async function findShortcode(site: Site, name: string): Promise<ShortcodeFunction | null> {
+  const shortcodesDir = resolve(site.cwd, site.config.srcDir, site.config.layoutsDir, "shortcodes");
 
   for (const ext of [".ts", ".js"]) {
     const path = join(shortcodesDir, `${name}${ext}`);
     if (await Bun.file(path).exists()) {
-      const url = Bun.pathToFileURL(path).href;
-      const module = await import(url);
+      const module = await importFresh(path);
       const fn = module.default ?? module;
       if (typeof fn !== "function") {
         throw new Error(`Shortcode "${name}" at "${path}" must export a function.`);
       }
-      return fn;
+      return fn as ShortcodeFunction;
     }
   }
 
-  throw new Error(`Shortcode "${name}" not found in "${shortcodesDir}".`);
+  return null;
 }
 
-/**
- * Process shortcodes in Markdown content.
- * Syntax: {{ name(arg1="value", arg2=123) }}
- */
-export async function processShortcodes(content: string, site: Site): Promise<string> {
+/** Resolve a shortcode function, memoized per build to avoid repeated FS lookups. */
+function resolveShortcode(site: Site, name: string): Promise<ShortcodeFunction | null> {
+  const cacheKey = `shortcode:${name}`;
+  let cached = site.buildCache.get(cacheKey) as Promise<ShortcodeFunction | null> | undefined;
+  if (!cached) {
+    cached = findShortcode(site, name);
+    site.buildCache.set(cacheKey, cached);
+  }
+  return cached;
+}
+
+async function processSegment(content: string, site: Site): Promise<string> {
   const matches: Array<{
     index: number;
     length: number;
@@ -64,7 +73,11 @@ export async function processShortcodes(content: string, site: Site): Promise<st
     const argsString = match[2];
 
     try {
-      const fn = await loadShortcode(site, name);
+      const fn = await resolveShortcode(site, name);
+      if (!fn) {
+        console.warn(`[shortcode] Shortcode "${name}" not found in "${site.config.layoutsDir}/shortcodes".`);
+        continue;
+      }
       const args = parseArgs(argsString);
       const replacement = await fn(args);
       matches.push({ index: match.index, length: match[0].length, replacement });
@@ -82,4 +95,17 @@ export async function processShortcodes(content: string, site: Site): Promise<st
   }
 
   return result;
+}
+
+/**
+ * Process shortcodes in Markdown content.
+ * Syntax: {{ name(arg1="value", arg2=123) }}
+ * Occurrences inside fenced code blocks are left untouched.
+ */
+export async function processShortcodes(content: string, site: Site): Promise<string> {
+  const out: string[] = [];
+  for (const segment of splitCodeFences(content)) {
+    out.push(segment.code ? segment.text : await processSegment(segment.text, site));
+  }
+  return out.join("\n");
 }

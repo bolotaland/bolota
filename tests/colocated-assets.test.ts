@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "bun:test";
+import { describe, it, expect, beforeEach, afterEach, afterAll } from "bun:test";
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import { Site } from "../src/core/site.ts";
@@ -8,6 +8,10 @@ import { copyColocatedAssets } from "../src/plugins/colocated.ts";
 import type { BolotaConfig } from "../src/core/config.ts";
 
 const tmpBase = join(import.meta.dir, "__tmp_colocated");
+
+afterAll(async () => {
+  await rm(tmpBase, { recursive: true, force: true });
+});
 
 const baseConfig: BolotaConfig = {
   srcDir: ".",
@@ -56,9 +60,10 @@ describe("co-located assets", () => {
     await rm(tmpRoot, { recursive: true, force: true });
   });
 
-  it("copies sibling files next to a named markdown page", async () => {
-    await Bun.write(join(tmpRoot, "content", "post.md"), `# Post`);
-    await Bun.write(join(tmpRoot, "content", "hero.png"), "fake-image");
+  it("copies sibling files inside a leaf bundle", async () => {
+    await Bun.write(join(tmpRoot, "content", "post", "index.md"), `# Post`);
+    await Bun.write(join(tmpRoot, "content", "post", "diagram.png"), "diagram");
+    await Bun.write(join(tmpRoot, "content", "post", "_data.yml"), "layout: page");
     await Bun.write(
       join(tmpRoot, "layouts", "page.ts"),
       `export default ({ content }) => content;`,
@@ -66,21 +71,33 @@ describe("co-located assets", () => {
 
     await buildSite({ ...baseConfig, srcDir: tmpRoot }, tmpRoot);
 
-    const asset = Bun.file(join(tmpRoot, "_site", "post", "hero.png"));
+    const asset = Bun.file(join(tmpRoot, "_site", "post", "diagram.png"));
     expect(await asset.exists()).toBe(true);
-    expect(await asset.text()).toBe("fake-image");
+    expect(await asset.text()).toBe("diagram");
 
     const dataFile = Bun.file(join(tmpRoot, "_site", "post", "_data.yml"));
     expect(await dataFile.exists()).toBe(false);
   });
 
-  it("copies sibling files inside a leaf bundle", async () => {
-    await Bun.write(join(tmpRoot, "content", "post", "index.md"), `# Post`);
-    await Bun.write(join(tmpRoot, "content", "post", "diagram.png"), "diagram");
+  it("copies section bundle assets once, not per sibling page", async () => {
+    await Bun.write(join(tmpRoot, "content", "blog", "_index.md"), `# Blog`);
+    await Bun.write(join(tmpRoot, "content", "blog", "a.md"), `# A`);
+    await Bun.write(join(tmpRoot, "content", "blog", "b.md"), `# B`);
+    await Bun.write(join(tmpRoot, "content", "blog", "photo.png"), "photo");
 
     await buildSite({ ...baseConfig, srcDir: tmpRoot }, tmpRoot);
 
-    const asset = Bun.file(join(tmpRoot, "_site", "post", "diagram.png"));
-    expect(await asset.exists()).toBe(true);
+    expect(await Bun.file(join(tmpRoot, "_site", "blog", "photo.png")).exists()).toBe(true);
+    expect(await Bun.file(join(tmpRoot, "_site", "blog", "a", "photo.png")).exists()).toBe(false);
+    expect(await Bun.file(join(tmpRoot, "_site", "blog", "b", "photo.png")).exists()).toBe(false);
+  });
+
+  it("does not copy siblings of a regular named page", async () => {
+    await Bun.write(join(tmpRoot, "content", "post.md"), `# Post`);
+    await Bun.write(join(tmpRoot, "content", "hero.png"), "fake-image");
+
+    await buildSite({ ...baseConfig, srcDir: tmpRoot }, tmpRoot);
+
+    expect(await Bun.file(join(tmpRoot, "_site", "post", "hero.png")).exists()).toBe(false);
   });
 });

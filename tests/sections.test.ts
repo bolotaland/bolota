@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "bun:test";
+import { describe, it, expect, beforeEach, afterEach, afterAll } from "bun:test";
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import { Site } from "../src/core/site.ts";
@@ -7,6 +7,10 @@ import { applyLayout } from "../src/plugins/templates.ts";
 import type { BolotaConfig } from "../src/core/config.ts";
 
 const tmpBase = join(import.meta.dir, "__tmp_sections");
+
+afterAll(async () => {
+  await rm(tmpBase, { recursive: true, force: true });
+});
 
 const baseConfig: BolotaConfig = {
   srcDir: ".",
@@ -66,18 +70,18 @@ describe("sections", () => {
     expect(html).toContain("<li>Second</li>");
   });
 
-  it("sorts section.pages by date when sort_by is date", async () => {
+  it("sorts section.pages by date, newest first", async () => {
     await Bun.write(
       join(tmpRoot, "content", "blog", "_index.md"),
       `---\nlayout: section\nsort_by: date\n---\n# Blog`,
     );
     await Bun.write(
-      join(tmpRoot, "content", "blog", "b.md"),
-      `---\ntitle: B\ndate: 2024-01-02\n---\n# B`,
-    );
-    await Bun.write(
       join(tmpRoot, "content", "blog", "a.md"),
       `---\ntitle: A\ndate: 2024-01-01\n---\n# A`,
+    );
+    await Bun.write(
+      join(tmpRoot, "content", "blog", "b.md"),
+      `---\ntitle: B\ndate: 2024-01-02\n---\n# B`,
     );
     await Bun.write(
       join(tmpRoot, "layouts", "section.ts"),
@@ -87,6 +91,25 @@ describe("sections", () => {
     await buildSite({ ...baseConfig, srcDir: tmpRoot }, tmpRoot);
 
     const html = await Bun.file(join(tmpRoot, "_site", "blog", "index.html")).text();
-    expect(html).toContain("<section>A,B</section>");
+    expect(html).toContain("<section>B,A</section>");
+  });
+
+  it("sorts section.pages by name, with reverse support", async () => {
+    await Bun.write(
+      join(tmpRoot, "content", "blog", "_index.md"),
+      `---\nlayout: section\nsort_by: name\nreverse: true\n---\n# Blog`,
+    );
+    await Bun.write(join(tmpRoot, "content", "blog", "b.md"), `---\ntitle: B\n---\n# B`);
+    await Bun.write(join(tmpRoot, "content", "blog", "a.md"), `---\ntitle: A\n---\n# A`);
+    await Bun.write(join(tmpRoot, "content", "blog", "c.md"), `---\ntitle: C\n---\n# C`);
+    await Bun.write(
+      join(tmpRoot, "layouts", "section.ts"),
+      `export default ({ section }) => \`<section>\${section.pages.map(p => p.frontmatter.title ?? p.name).join(",")}</section>\`;`,
+    );
+
+    await buildSite({ ...baseConfig, srcDir: tmpRoot }, tmpRoot);
+
+    const html = await Bun.file(join(tmpRoot, "_site", "blog", "index.html")).text();
+    expect(html).toContain("<section>C,B,A</section>");
   });
 });

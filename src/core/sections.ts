@@ -6,6 +6,11 @@ export interface Section {
   pages: Page[];
 }
 
+/** Section keys are the "/"-separated directory of the _index.md file ("." for root). */
+function sectionKey(page: Page): string {
+  return dirname(page.relativePath);
+}
+
 /** Build a map of section paths to their child pages. */
 export function buildSections(pages: Page[]): Map<string, Section> {
   const sections = new Map<string, Section>();
@@ -13,8 +18,7 @@ export function buildSections(pages: Page[]): Map<string, Section> {
   // First pass: create sections for every _index.md.
   for (const page of pages) {
     if (page.kind === "section") {
-      const sectionPath = dirname(page.relativePath).replace(/\\/g, "/");
-      sections.set(sectionPath, { pages: [] });
+      sections.set(sectionKey(page), { pages: [] });
     }
   }
 
@@ -24,8 +28,7 @@ export function buildSections(pages: Page[]): Map<string, Section> {
       continue;
     }
 
-    const pageDir = dirname(page.relativePath).replace(/\\/g, "/");
-    const section = sections.get(pageDir);
+    const section = sections.get(sectionKey(page));
     if (section) {
       section.pages.push(page);
     }
@@ -39,6 +42,5 @@ export function getSection(sections: Map<string, Section>, page: Page): Section 
   if (page.kind !== "section") {
     return undefined;
   }
-  const sectionPath = dirname(page.relativePath).replace(/\\/g, "/");
-  return sections.get(sectionPath);
+  return sections.get(sectionKey(page));
 }

@@ -1,15 +1,16 @@
 // File watcher plugin using fs.watch
 
-import { watch } from "node:fs";
-import { join } from "node:path";
+import { existsSync, watch } from "node:fs";
+import { resolve } from "node:path";
 import type { BolotaConfig } from "../core/config.ts";
 import type { Site } from "../core/site.ts";
-import { broadcastReload } from "./server.ts";
 
 type WatcherCallback = () => Promise<void>;
 
 /**
- * Watch source, layout, and public directories for changes and invoke a callback.
+ * Watch content, layout, and public directories for changes and invoke a
+ * callback. Missing directories are skipped. Overlapping rebuilds are
+ * serialized: changes arriving during a build trigger exactly one more run.
  * Returns a cleanup function to stop watching.
  */
 export function watchFiles(
@@ -17,24 +18,43 @@ export function watchFiles(
   callback: WatcherCallback,
   cwd: string = process.cwd(),
 ): () => void {
-  const srcDir = join(cwd, config.srcDir, config.contentDir);
-  const layoutsDir = join(cwd, config.srcDir, config.layoutsDir);
-  const publicDir = join(cwd, config.srcDir, config.publicDir);
+  const dirs = [
+    resolve(cwd, config.srcDir, config.contentDir),
+    resolve(cwd, config.srcDir, config.layoutsDir),
+    resolve(cwd, config.srcDir, config.publicDir),
+  ];
+  const watchedPaths = [...new Set(dirs)].filter((dir) => existsSync(dir));
 
-  const watchedPaths = new Set([srcDir, layoutsDir, publicDir]);
   const watchers: ReturnType<typeof watch>[] = [];
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+  let building = false;
+  let pending = false;
+
+  const runCallback = (): void => {
+    if (building) {
+      pending = true;
+      return;
+    }
+    building = true;
+    callback()
+      .catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(`[watcher] Rebuild failed: ${message}`);
+      })
+      .finally(() => {
+        building = false;
+        if (pending) {
+          pending = false;
+          triggerRebuild();
+        }
+      });
+  };
 
   const triggerRebuild = (): void => {
     if (debounceTimer) {
       clearTimeout(debounceTimer);
     }
-    debounceTimer = setTimeout(() => {
-      callback().catch((error: unknown) => {
-        const message = error instanceof Error ? error.message : String(error);
-        console.error(`[watcher] Rebuild failed: ${message}`);
-      });
-    }, 300);
+    debounceTimer = setTimeout(runCallback, 300);
   };
 
   for (const dir of watchedPaths) {
@@ -72,23 +92,25 @@ export function watchFiles(
 
 /**
  * Watch the site and rebuild on changes.
+ * `onRebuild` runs after each successful rebuild (e.g. live-reload broadcast).
  */
 export function startWatcher(
   config: BolotaConfig,
   site: Site,
   cwd: string = process.cwd(),
+  onRebuild?: () => void,
 ): () => void {
   const cleanup = watchFiles(
     config,
     async () => {
       console.log("[watch] Rebuilding...");
       await site.build();
-      broadcastReload();
+      onRebuild?.();
       console.log("[watch] Rebuild complete.");
     },
     cwd,
   );
 
-  console.log(`[watch] Watching ${join(cwd, config.srcDir)} for changes...`);
+  console.log(`[watch] Watching ${resolve(cwd, config.srcDir)} for changes...`);
   return cleanup;
 }

@@ -31,4 +31,37 @@ describe("parseFrontmatter", () => {
     expect(result.frontmatter).toEqual({});
     expect(result.body).toBe("Body.");
   });
+
+  it("ignores --- appearing inside a frontmatter value", () => {
+    const result = parseFrontmatter(`---\ntitle: foo---bar\n---\nBody`);
+    expect(result.frontmatter).toEqual({ title: "foo---bar" });
+    expect(result.body).toBe("Body");
+  });
+
+  it("does not treat a leading horizontal rule as frontmatter", () => {
+    const content = `---\njust some text\n---\nmore text`;
+    const result = parseFrontmatter(content);
+    expect(result.frontmatter).toEqual({});
+    expect(result.body).toBe(content);
+  });
+
+  it("requires the opening delimiter to be alone on its line", () => {
+    const content = `--- not frontmatter\ntext\n---\nbody`;
+    const result = parseFrontmatter(content);
+    expect(result.frontmatter).toEqual({});
+    expect(result.body).toBe(content);
+  });
+
+  it("requires the closing delimiter to be alone on its line", () => {
+    const content = `---\ntitle: x\n--- trailing\nbody`;
+    const result = parseFrontmatter(content);
+    expect(result.frontmatter).toEqual({});
+    expect(result.body).toBe(content);
+  });
+
+  it("handles CRLF line endings", () => {
+    const result = parseFrontmatter(`---\r\ntitle: Hello\r\n---\r\nBody`);
+    expect(result.frontmatter).toEqual({ title: "Hello" });
+    expect(result.body).toBe("Body");
+  });
 });

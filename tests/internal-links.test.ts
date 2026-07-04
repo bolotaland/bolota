@@ -26,4 +26,20 @@ describe("resolveInternalLinks", () => {
     const result = resolveInternalLinks("[External](https://example.com)");
     expect(result).toBe("[External](https://example.com)");
   });
+
+  it("preserves fragments", () => {
+    const result = resolveInternalLinks("[Team](@/about.md#team)");
+    expect(result).toBe("[Team](/about/#team)");
+  });
+
+  it("strips date prefixes like page slugs do", () => {
+    const result = resolveInternalLinks("[Post](@/blog/2024-01-15-hello.md)");
+    expect(result).toBe("[Post](/blog/hello/)");
+  });
+
+  it("leaves links inside fenced code blocks untouched", () => {
+    const content = "```md\n[About](@/about.md)\n```\n\n[About](@/about.md)";
+    const result = resolveInternalLinks(content);
+    expect(result).toBe("```md\n[About](@/about.md)\n```\n\n[About](/about/)");
+  });
 });

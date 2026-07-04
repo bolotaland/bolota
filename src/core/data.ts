@@ -1,4 +1,5 @@
 import { dirname, extname, relative, sep } from "node:path";
+import { importFresh } from "./modules.ts";
 import type { Page } from "./pages.ts";
 import type { BolotaConfig } from "./config.ts";
 
@@ -57,8 +58,7 @@ async function loadDataFile(filePath: string): Promise<Record<string, unknown>> 
 
     case ".js":
     case ".ts": {
-      const url = Bun.pathToFileURL(filePath).href;
-      const module = await import(url);
+      const module = await importFresh(filePath);
       const value = module.default ?? module;
       if (value === null || typeof value !== "object" || Array.isArray(value)) {
         throw new Error(`JS/TS data file must export an object: ${filePath}`);
@@ -83,8 +83,7 @@ export async function loadSharedData(contentDir: string): Promise<SharedDataByDi
     }
 
     const dirPath = dirname(filePath);
-    const relDir = relative(contentDir, dirPath);
-    const key = relDir === "" ? "" : relDir;
+    const key = relative(contentDir, dirPath).split(sep).join("/");
 
     const list = filesByDir.get(key) ?? [];
     list.push(filePath);
@@ -123,10 +122,9 @@ function mergeObjects(
   return { ...base, ...override };
 }
 
+/** Scopes and page paths are compared in "/"-separated form on all platforms. */
 function normalizeScope(scope: string): string {
-  let normalized = scope.replace(/\//g, sep).replace(/\\/g, sep);
-  normalized = normalized.replace(/^\/+/, "").replace(/\/+$/, "");
-  return normalized;
+  return scope.replace(/\\/g, "/").replace(/^\/+/, "").replace(/\/+$/, "");
 }
 
 function pageMatchesScope(pageRelativePath: string, scope: string): boolean {
@@ -141,8 +139,7 @@ function pageMatchesScope(pageRelativePath: string, scope: string): boolean {
   }
 
   // Directory prefix match.
-  const prefix = normalizedScope + sep;
-  return pageRelativePath.startsWith(prefix);
+  return pageRelativePath.startsWith(`${normalizedScope}/`);
 }
 
 /** Holds global, scoped and shared data for a site build. */
@@ -193,15 +190,9 @@ export class SiteData implements DataRegistry {
 
     // Shared data: walk from root to the page's directory so closer dirs win.
     const pageDir = dirname(page.relativePath);
-    const parts = pageDir === "." ? [] : pageDir.split(sep);
-    const dirs: string[] = [];
+    const parts = pageDir === "." ? [] : pageDir.split("/");
     for (let i = 0; i <= parts.length; i++) {
-      dirs.push(parts.slice(0, i).join(sep));
-    }
-
-    for (const dir of dirs) {
-      const key = dir === "" ? "" : dir;
-      const data = this.shared.get(key);
+      const data = this.shared.get(parts.slice(0, i).join("/"));
       if (data) {
         Object.assign(result, data);
       }

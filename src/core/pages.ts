@@ -1,5 +1,7 @@
-import { relative, basename, extname, join } from "node:path";
+import { relative, basename, extname, resolve, sep } from "node:path";
 import { parseFrontmatter } from "./frontmatter.ts";
+import { slugify } from "./html.ts";
+import { splitCodeFences } from "./segments.ts";
 import type { BolotaConfig } from "./config.ts";
 
 export interface Heading {
@@ -11,11 +13,11 @@ export interface Heading {
 export interface Page {
   /** Absolute filesystem path to the source file */
   sourcePath: string;
-  /** Path relative to the configured content directory */
+  /** Path relative to the configured content directory, always "/"-separated */
   relativePath: string;
-  /** Output path relative to the configured output directory */
+  /** Output path relative to the configured output directory, always "/"-separated */
   outputPath: string;
-  /** Public URL path (e.g. "about/" or "") */
+  /** Public URL path (e.g. "/about/" or "/") */
   url: string;
   /** Raw file content (including frontmatter) */
   rawContent: string;
@@ -37,31 +39,41 @@ export interface Page {
   compiledContent?: string;
 }
 
+/** Filenames like 2024-01-15-hello.md: date prefix, then the slug. */
+const DATE_PREFIX = /^(\d{4}-\d{2}-\d{2})-(.+)$/;
+
 function computeOutputPath(relativePath: string, ext: string): string {
-  const dirPath = relativePath.slice(0, -ext.length);
+  const segments = relativePath.slice(0, -ext.length).split("/");
+  const name = segments.pop() ?? "";
 
-  // Section landing pages: content/dir/_index.md -> dir/index.html
-  if (dirPath.endsWith("_index")) {
-    const parentDir = dirPath.slice(0, -"_index".length);
-    return parentDir ? join(parentDir, "index.html") : "index.html";
+  // index.md and _index.md both map to their directory's index.html.
+  // Compare the basename, not a suffix: "reindex.md" is a regular page.
+  if (name === "index" || name === "_index") {
+    return [...segments, "index.html"].join("/");
   }
 
-  // Named index pages: content/dir/index.md -> dir/index.html
-  if (dirPath.endsWith("index")) {
-    return `${dirPath}.html`;
-  }
-
-  return join(dirPath, "index.html");
+  // Strip a leading date from the slug: 2024-01-15-hello.md -> hello/
+  const slug = name.replace(DATE_PREFIX, "$2");
+  return [...segments, slug, "index.html"].join("/");
 }
 
 function computeUrl(outputPath: string): string {
-  // "about/index.html" -> "about/"
-  // "index.html" -> ""
-  return outputPath.replace(/index\.html$/i, "");
+  // "about/index.html" -> "/about/"
+  // "index.html" -> "/"
+  return `/${outputPath.replace(/index\.html$/i, "")}`;
 }
 
-function inferPageKind(name: string, relativePath: string): Page["kind"] {
-  if (name === "index" && relativePath.replace(/\.md$/i, "") === "index") {
+/**
+ * Map a content-relative source path (e.g. "blog/post.md") to its public URL
+ * (e.g. "/blog/post/"). Used by internal `@/` link resolution.
+ */
+export function urlForContentPath(relativePath: string): string {
+  const normalized = relativePath.split(sep).join("/");
+  return computeUrl(computeOutputPath(normalized, extname(normalized)));
+}
+
+function inferPageKind(name: string, relativePath: string, ext: string): Page["kind"] {
+  if (name === "index" && relativePath === `index${ext}`) {
     return "index";
   }
   if (name === "_index") {
@@ -89,8 +101,7 @@ function inferDate(name: string, frontmatter: Record<string, unknown>): Date | u
     return fromFrontmatter;
   }
 
-  // Filenames like 2024-01-15-hello.md
-  const match = name.match(/^(\d{4}-\d{2}-\d{2})-/);
+  const match = name.match(DATE_PREFIX);
   if (match) {
     const date = new Date(match[1]);
     if (!Number.isNaN(date.getTime())) {
@@ -106,25 +117,26 @@ export function extractHeadings(body: string): Heading[] {
   const seen = new Map<string, number>();
   const regex = /^(#{1,6})\s+(.+)$/gm;
 
-  for (const match of body.matchAll(regex)) {
-    const text = match[2].trim();
-    let slug = text
-      .toLowerCase()
-      .replace(/[^\w\s-]/g, "")
-      .replace(/[\s_-]+/g, "-")
-      .replace(/^-+|-+$/g, "");
-
-    const count = seen.get(slug) ?? 0;
-    seen.set(slug, count + 1);
-    if (count > 0) {
-      slug = `${slug}-${count}`;
+  for (const segment of splitCodeFences(body)) {
+    if (segment.code) {
+      continue;
     }
+    for (const match of segment.text.matchAll(regex)) {
+      const text = match[2].trim();
+      let slug = slugify(text);
 
-    headings.push({
-      depth: match[1].length,
-      text,
-      slug,
-    });
+      const count = seen.get(slug) ?? 0;
+      seen.set(slug, count + 1);
+      if (count > 0) {
+        slug = `${slug}-${count}`;
+      }
+
+      headings.push({
+        depth: match[1].length,
+        text,
+        slug,
+      });
+    }
   }
 
   return headings;
@@ -134,23 +146,33 @@ export function extractHeadings(body: string): Heading[] {
  * Discover all content pages in the content directory.
  * Uses `Bun.Glob` for fast recursive file scanning.
  */
-export async function discoverPages(config: BolotaConfig): Promise<Page[]> {
+export async function discoverPages(
+  config: BolotaConfig,
+  cwd: string = process.cwd(),
+): Promise<Page[]> {
   const pages: Page[] = [];
-  const contentPath = join(config.srcDir, config.contentDir);
+  const contentPath = resolve(cwd, config.srcDir, config.contentDir);
   const glob = new Bun.Glob("**/*.{md,markdown}");
 
   for await (const filePath of glob.scan({ cwd: contentPath, absolute: true })) {
     const ext = extname(filePath);
-    const f = Bun.file(filePath);
-    const rawContent = await f.text();
-    const { frontmatter, body } = parseFrontmatter(rawContent);
+    const rawContent = await Bun.file(filePath).text();
 
-    const relativePath = relative(contentPath, filePath);
+    const relativePath = relative(contentPath, filePath).split(sep).join("/");
+    let frontmatter: Record<string, unknown>;
+    let body: string;
+    try {
+      ({ frontmatter, body } = parseFrontmatter(rawContent));
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`Invalid frontmatter in "${relativePath}": ${message}`);
+    }
+
     const name = basename(filePath, ext);
 
     const outputPath = computeOutputPath(relativePath, ext);
     const url = computeUrl(outputPath);
-    const kind = inferPageKind(name, relativePath);
+    const kind = inferPageKind(name, relativePath, ext);
     const date = inferDate(name, frontmatter);
 
     pages.push({

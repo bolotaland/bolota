@@ -1,6 +1,7 @@
-import { dirname, join, relative } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import type { Page } from "../core/pages.ts";
 import type { BolotaConfig } from "../core/config.ts";
+import { isIgnoredAsset } from "./assets.ts";
 
 function isCopyableFile(fileName: string): boolean {
   const lower = fileName.toLowerCase();
@@ -10,34 +11,39 @@ function isCopyableFile(fileName: string): boolean {
   if (fileName.startsWith("_data.")) {
     return false;
   }
+  if (isIgnoredAsset(fileName)) {
+    return false;
+  }
   return true;
 }
 
 /**
- * Copy assets co-located with content pages.
- * For a page at content/dir/page.md, copies non-Markdown sibling files
- * to _site/dir/page/.
+ * Copy assets co-located with a page bundle (a directory owned by an
+ * `index.md` or `_index.md` file), Hugo-style. Regular sibling pages do not
+ * carry their directory's assets — that would copy every asset once per page.
  */
 export async function copyColocatedAssets(
   page: Page,
   config: BolotaConfig,
   cwd: string = process.cwd(),
 ): Promise<void> {
+  if (page.name !== "index" && page.name !== "_index") {
+    return;
+  }
+
   const sourceDir = dirname(page.sourcePath);
-  const outputDir = join(cwd, config.outDir, dirname(page.outputPath));
+  const outputDir = resolve(cwd, config.outDir, dirname(page.outputPath));
 
   const glob = new Bun.Glob("*");
+  const copies: Promise<unknown>[] = [];
+
   for await (const filePath of glob.scan({ cwd: sourceDir, absolute: true })) {
     const fileName = filePath.slice(sourceDir.length + 1);
     if (!isCopyableFile(fileName)) {
       continue;
     }
-
-    const stat = await Bun.file(filePath).stat().catch(() => null);
-    if (!stat || stat.isDirectory()) {
-      continue;
-    }
-
-    await Bun.write(join(outputDir, fileName), Bun.file(filePath));
+    copies.push(Bun.write(join(outputDir, fileName), Bun.file(filePath)));
   }
+
+  await Promise.all(copies);
 }

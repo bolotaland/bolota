@@ -18,11 +18,10 @@ A minimal static site generator (SSG) powered by [Bun](https://bun.com) and vani
 | **Collections** | Group pages automatically with `tags: [post]` |
 | **Sections** | `content/blog/_index.md` becomes a section with `section.pages` |
 | **Assets** | `public/` copied as-is + co-located assets next to content |
-| **Internal links** | `[About](@/about.md)` resolves to `/about/` at build time |
+| **Internal links** | `[About](@/about.md)` resolves to `/about/` at build time, fragments included |
 | **Shortcodes** | `{{ youtube(id="abc") }}` calls `layouts/shortcodes/youtube.ts` |
 | **Render hooks** | Customize `<img>`, `<a>`, and `<h*>` via `layouts/_markup/` |
-| **Dev server** | `Bun.serve()` with SSE live-reload |
-| **Watch mode** | Auto-rebuild on content, layout, or asset changes |
+| **Dev server** | `Bun.serve()` with SSE live-reload and auto-rebuild on changes |
 | **Zero config** | Sensible defaults out of the box |
 | **Zero dependencies** | Only Bun and TypeScript |
 
@@ -150,22 +149,24 @@ All commands are run from inside a Bolota project directory (the folder containi
 # Static build
 bun run /path/to/bolota/src/cli/index.ts build
 
-# Development server with live-reload
+# Development server: build, serve, live-reload, rebuild on changes
 bun run /path/to/bolota/src/cli/index.ts serve
 
-# Watch mode: server + auto-rebuild on file changes
-bun run /path/to/bolota/src/cli/index.ts watch
+# Override the port
+bun run /path/to/bolota/src/cli/index.ts serve --port 4000
 
-# Help
+# Help / version
 bun run /path/to/bolota/src/cli/index.ts --help
-
-# Version
 bun run /path/to/bolota/src/cli/index.ts --version
 ```
 
+`watch` is accepted as an alias of `serve`.
+
+> **Note**: `build` fails hard when `bolota.config.ts` cannot be loaded — a production build never silently falls back to the default configuration. `serve` warns and continues, so you can fix the config while the server runs.
+
 ### Live reload
 
-In `serve` and `watch` modes, Bolota injects a small script into HTML responses that connects to `/__livereload` via Server-Sent Events. When a file changes, the browser reloads automatically.
+In `serve` mode, Bolota injects a small script into HTML responses that connects to `/__livereload` via Server-Sent Events. When a file changes, the site is rebuilt and the browser reloads automatically. Layouts, shortcodes, render hooks, and `_data.ts` modules are re-imported when they change (mtime-based cache busting).
 
 ---
 
@@ -211,14 +212,16 @@ export default function (site) {
 
 ### Available options
 
+The config file can be `bolota.config.ts` or `bolota.config.js`.
+
 | Option | Type | Default | Description |
 |---|---|---|---|
 | `srcDir` | `string` | `"."` | Root directory for source files |
 | `contentDir` | `string` | `"content"` | Directory containing Markdown pages |
 | `layoutsDir` | `string` | `"layouts"` | Directory containing JS/TS layouts |
 | `publicDir` | `string` | `"public"` | Directory containing static assets |
-| `outDir` | `string` | `"_site"` | Output directory for the generated site |
-| `port` | `number` | `3000` | Port for the development server |
+| `outDir` | `string` | `"_site"` | Output directory for the generated site (must not contain the sources) |
+| `port` | `number` | `3000` | Port for the development server (`--port` overrides it) |
 | `site` | `Record<string, unknown>` | `{}` | Global metadata available in all templates |
 | `data` | `Record<string, unknown>` | `{}` | Global data available in all pages and layouts |
 | `scopedData` | `Record<string, Record<string, unknown>>` | `{}` | Data scoped to a directory or file path |
@@ -238,7 +241,7 @@ markdownOptions: {
 }
 ```
 
-See the [Bun Markdown API docs](https://bun.sh/docs/api/markdown) for the full list of options.
+See the [Bun Markdown API docs](https://bun.com/docs/api/markdown) for the full list of options.
 
 ---
 
@@ -296,7 +299,8 @@ tags = ["post"]
 | `layout` | Explicit layout name (overrides convention) |
 | `date` | Publication date, also inferred from `YYYY-MM-DD-slug.md` |
 | `tags` | Tags for collections |
-| `sort_by` | Section sort order: `"date"`, `"weight"`, or `"name"` |
+| `sort_by` | Section sort order: `"date"` (newest first), `"weight"`, or `"name"` |
+| `reverse` | Set to `true` to reverse the section sort order |
 | `excludeFromCollections` | Set to `true` to omit from `collections.all` |
 
 ### Pretty URLs
@@ -309,6 +313,9 @@ By default, Bolota generates pretty URLs:
 | `content/about.md` | `_site/about/index.html` | `/about/` |
 | `content/blog/post.md` | `_site/blog/post/index.html` | `/blog/post/` |
 | `content/blog/_index.md` | `_site/blog/index.html` | `/blog/` |
+| `content/blog/2024-01-15-hello.md` | `_site/blog/hello/index.html` | `/blog/hello/` |
+
+`page.url` is always absolute (leading `/`), so it can be used directly in `href` attributes from any depth. Date prefixes in filenames set the page date and are stripped from the slug.
 
 ### Sections
 
@@ -387,7 +394,6 @@ Inside `bolota.config.ts`, export a function that receives a `site` registry wit
 ```ts
 export default function (site) {
   site.data("year", 2026);
-  site.data("randomNumber", () => Math.random());
   site.data("layout", "post", "posts"); // scoped to the posts/ directory
 
   return {
@@ -395,6 +401,8 @@ export default function (site) {
   };
 }
 ```
+
+Values are passed to layouts as-is. A function value is not evaluated automatically — layouts receive the function itself and can call it.
 
 Global data can also be declared from the object-style config:
 
@@ -562,6 +570,8 @@ export default ({ collections, content }) => `
 
 - `collections.all` contains every page (except those with `excludeFromCollections: true`).
 - `collections.post` contains pages tagged `post`.
+- Collections are sorted by date, newest first; pages without a date come last.
+- Each page in a collection exposes `compiledContent`, its rendered HTML body — useful for excerpts or feeds.
 
 ---
 
@@ -584,7 +594,7 @@ Use in Markdown:
 {{ youtube(id="dQw4w9WgXcQ", className="video") }}
 ```
 
-Supported argument types: strings, numbers, booleans.
+Supported argument types: strings, numbers (integers and floats), booleans. Shortcodes inside fenced code blocks are left untouched, so you can document them safely.
 
 ---
 
@@ -622,6 +632,7 @@ Use `@/` links to reference other Markdown files. They are resolved to pretty UR
 [About](@/about.md)
 [Blog](@/blog/_index.md)
 [Post](@/blog/post.md)
+[Team](@/about.md#team)
 ```
 
 Becomes:
@@ -630,9 +641,10 @@ Becomes:
 <a href="/about/">About</a>
 <a href="/blog/">Blog</a>
 <a href="/blog/post/">Post</a>
+<a href="/about/#team">Team</a>
 ```
 
-This keeps links robust even if URLs change.
+This keeps links robust even if URLs change. A warning is printed at build time when an `@/` link points to a file that does not exist. Links inside fenced code blocks are left untouched.
 
 ---
 
@@ -656,7 +668,7 @@ public/logo.png    →   _site/logo.png
 
 ### Co-located assets
 
-Keep assets next to the content that uses them:
+Keep assets next to the content that uses them, in a **page bundle** — a directory owned by an `index.md` or `_index.md` file:
 
 ```
 content/blog/post/
@@ -669,6 +681,8 @@ content/blog/post/
 ```md
 ![Hero](hero.png)
 ```
+
+Only bundles (`index.md` / `_index.md`) carry their directory's assets; siblings of a regular page like `content/blog/post.md` are not copied. `.DS_Store` and `Thumbs.db` are always skipped.
 
 If your project doesn't need a `public/` directory, Bolota skips the copy step automatically.
 
