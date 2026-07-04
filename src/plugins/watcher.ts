@@ -45,9 +45,8 @@ export function watchFiles(
         if (!filename) {
           return;
         }
-        const filenameStr = Buffer.isBuffer(filename) ? filename.toString() : filename;
         // Ignore hidden files and common temp files
-        if (filenameStr.startsWith(".") || filenameStr.endsWith("~")) {
+        if (filename.startsWith(".") || filename.endsWith("~")) {
           return;
         }
         triggerRebuild();

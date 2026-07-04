@@ -36,8 +36,8 @@ async function main(): Promise<void> {
     return;
   }
 
-  const config = await loadConfig();
-  const site = new Site(config);
+  const { config, data: siteData } = await loadConfig();
+  const site = new Site(config, process.cwd(), siteData);
   const ventoEnv = createVentoEnv(config);
 
   // Register built-in plugins
@@ -54,8 +54,8 @@ async function main(): Promise<void> {
       // Ensure layout changes are picked up on every build (watch mode).
       ventoEnv.cache.clear();
     },
-    async transform(page) {
-      return applyLayout(page, config, ventoEnv);
+    async transform(page, site) {
+      return applyLayout(page, site, ventoEnv);
     },
   });
 

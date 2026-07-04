@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import { Site } from "../src/core/site.ts";
 import { transformMarkdown } from "../src/plugins/markdown.ts";
@@ -30,8 +30,8 @@ async function buildWithConfig(config: BolotaConfig, cwd: string): Promise<strin
 
   site.use({
     name: "vento",
-    async transform(page) {
-      return applyLayout(page, config, env);
+    async transform(page, site) {
+      return applyLayout(page, site, env);
     },
   });
 
@@ -44,8 +44,6 @@ describe("vento plugin", () => {
 
   beforeEach(async () => {
     tmpRoot = join(tmpBase, crypto.randomUUID());
-    await mkdir(join(tmpRoot, "content"), { recursive: true });
-    await mkdir(join(tmpRoot, "layouts"), { recursive: true });
   });
 
   afterEach(async () => {
@@ -53,11 +51,11 @@ describe("vento plugin", () => {
   });
 
   it("does not auto-trim whitespace by default", async () => {
-    await writeFile(
+    await Bun.write(
       join(tmpRoot, "content", "hello.md"),
       `---\ntitle: Hello\nlayout: base\n---\n\n# Hello`,
     );
-    await writeFile(
+    await Bun.write(
       join(tmpRoot, "layouts", "base.vto"),
       `{{ if true }}\n  <p>Keep me</p>\n{{ /if }}`,
     );
@@ -67,11 +65,11 @@ describe("vento plugin", () => {
   });
 
   it("trims whitespace when autoTrim is enabled", async () => {
-    await writeFile(
+    await Bun.write(
       join(tmpRoot, "content", "hello.md"),
       `---\ntitle: Hello\nlayout: base\n---\n\n# Hello`,
     );
-    await writeFile(
+    await Bun.write(
       join(tmpRoot, "layouts", "base.vto"),
       `{{ if true }}\n  <p>Trim me</p>\n{{ /if }}`,
     );
@@ -83,11 +81,11 @@ describe("vento plugin", () => {
   });
 
   it("trims only configured tags when autoTrim.tags is provided", async () => {
-    await writeFile(
+    await Bun.write(
       join(tmpRoot, "content", "hello.md"),
       `---\ntitle: Hello\nlayout: base\n---\n\n# Hello`,
     );
-    await writeFile(
+    await Bun.write(
       join(tmpRoot, "layouts", "base.vto"),
       `{{ set message = "Hi" }}\n  <p>{{ message }}</p>\n{{ if true }}\n  <span>Keep</span>\n{{ /if }}`,
     );

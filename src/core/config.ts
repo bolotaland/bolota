@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import { SiteData, type DataRegistry } from "./data.ts";
 
 /**
  * Options passed to Bun.markdown.html().
@@ -49,6 +50,21 @@ export interface BolotaConfig {
   markdownOptions?: MarkdownOptions;
   /** Vento engine options */
   vento?: VentoConfig;
+  /** Global data available in all pages, layouts and components */
+  data?: Record<string, unknown>;
+  /** Scoped data keyed by path (directory or file, relative to contentDir) */
+  scopedData?: Record<string, Record<string, unknown>>;
+}
+
+/** Function form of a config file. Receives a data registry exposing `data()`. */
+export type ConfigFunction = (
+  site: DataRegistry,
+) => Partial<BolotaConfig> | Promise<Partial<BolotaConfig>>;
+
+/** Result returned by {@link loadConfig}. */
+export interface LoadedConfig {
+  config: BolotaConfig;
+  data: SiteData;
 }
 
 /** Default configuration used when no user config is provided */
@@ -82,32 +98,76 @@ function sanitizeConfig(
     },
     markdownOptions: user.markdownOptions ?? base.markdownOptions,
     vento: user.vento ?? base.vento,
+    data: {
+      ...base.data,
+      ...(user.data ?? {}),
+    },
+    scopedData: {
+      ...base.scopedData,
+      ...(user.scopedData ?? {}),
+    },
   };
+}
+
+function populateSiteDataFromConfig(
+  siteData: SiteData,
+  config: BolotaConfig,
+): void {
+  if (config.data) {
+    for (const [key, value] of Object.entries(config.data)) {
+      siteData.data(key, value);
+    }
+  }
+  if (config.scopedData) {
+    for (const [scope, map] of Object.entries(config.scopedData)) {
+      for (const [key, value] of Object.entries(map)) {
+        siteData.data(key, value, scope);
+      }
+    }
+  }
 }
 
 /**
  * Load user configuration from `bolota.config.ts` in the current working directory.
  * Falls back to `defaultConfig` if no config file is found. If loading fails,
  * a warning is printed and the default configuration is used.
+ *
+ * The config file can export either a plain object or a function that receives
+ * a data registry (`site.data()`). Global/scoped data registered this way are
+ * returned alongside the sanitized config.
  */
 export async function loadConfig(
   cwd: string = process.cwd(),
-): Promise<BolotaConfig> {
+): Promise<LoadedConfig> {
   const configPath = join(cwd, "bolota.config.ts");
   const configFile = Bun.file(configPath);
+  const fallbackData = new SiteData();
 
   if (!(await configFile.exists())) {
-    return { ...defaultConfig };
+    return { config: { ...defaultConfig }, data: fallbackData };
   }
 
   try {
     const module = await import(configPath);
-    const userConfig: Partial<BolotaConfig> = module.default ?? module;
-    return sanitizeConfig(defaultConfig, userConfig);
+    const exported = module.default ?? module;
+
+    if (typeof exported === "function") {
+      const siteData = new SiteData();
+      const userConfig: Partial<BolotaConfig> = await exported(siteData);
+      const config = sanitizeConfig(defaultConfig, userConfig);
+      populateSiteDataFromConfig(siteData, config);
+      return { config, data: siteData };
+    }
+
+    const userConfig: Partial<BolotaConfig> = exported;
+    const config = sanitizeConfig(defaultConfig, userConfig);
+    const siteData = new SiteData();
+    populateSiteDataFromConfig(siteData, config);
+    return { config, data: siteData };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.warn(`[config] Failed to load ${configPath}. Using default config.`);
     console.warn(`[config] ${message}`);
-    return { ...defaultConfig };
+    return { config: { ...defaultConfig }, data: fallbackData };
   }
 }

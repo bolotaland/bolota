@@ -5,6 +5,7 @@ import vento from "ventojs";
 import autoTrim, { defaultTags } from "ventojs/plugins/auto_trim.js";
 import type { Page } from "../core/pages.ts";
 import type { BolotaConfig } from "../core/config.ts";
+import type { Site } from "../core/site.ts";
 
 export type VentoEnvironment = ReturnType<typeof vento>;
 
@@ -66,26 +67,28 @@ export async function renderVentoFile(
 }
 
 /**
- * Wrap a page's body in its layout if one is specified in frontmatter.
+ * Wrap a page's body in its layout if one is specified in frontmatter or data.
  */
 export async function applyLayout(
   page: Page,
-  config: BolotaConfig,
+  site: Site,
   env: VentoEnvironment,
 ): Promise<Page> {
-  const layout = page.frontmatter.layout as string | undefined;
+  const pageData = site.data.getPageData(page, site.config);
+  const layout = pageData.layout as string | undefined;
+
   if (!layout) {
     return page;
   }
 
-  const layoutsDir = join(config.srcDir, config.layoutsDir);
+  const layoutsDir = join(site.config.srcDir, site.config.layoutsDir);
   const layoutPath = join(layoutsDir, `${layout}.vto`);
 
   const layoutData = {
-    ...page.frontmatter,
+    ...pageData,
     content: page.body,
     page,
-    site: config.site,
+    site: site.config.site,
   };
 
   try {

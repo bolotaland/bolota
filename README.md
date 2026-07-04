@@ -151,6 +151,8 @@ export default config;
 | `outDir` | `string` | `"_site"` | Output directory for the generated site |
 | `port` | `number` | `3000` | Port for the development server |
 | `site` | `Record<string, unknown>` | `{}` | Global metadata available in all templates |
+| `data` | `Record<string, unknown>` | `{}` | Global data available in all pages, layouts and components |
+| `scopedData` | `Record<string, Record<string, unknown>>` | `{}` | Data scoped to a directory or file path |
 | `markdownOptions` | `object` | — | Options passed to `Bun.markdown.html()` |
 | `vento.autoTrim` | `boolean \| { tags: string[] }` | `false` | Enable the Vento autoTrim plugin |
 
@@ -169,6 +171,76 @@ markdownOptions: {
 ```
 
 See the [Bun Markdown API docs](https://bun.sh/docs/api/markdown) for the full list of options.
+
+---
+
+## 📊 Shared and global data
+
+Bolota supports two data layers inspired by [Lume](https://lume.land).
+
+### Shared data (`_data.*` files)
+
+Create a `_data.yml`, `_data.yaml`, `_data.json`, `_data.ts`, or `_data.js` file inside `content/` or any subfolder. Its values are shared by all pages in that folder and its subfolders. Closer folders override parent folders.
+
+```yml
+# content/_data.yml
+layout: base
+author: Bolota
+```
+
+```md
+---
+title: Home
+---
+# Welcome
+```
+
+Available in layouts:
+
+```vto
+<p>By {{ author }}</p>
+{{ content |> safe }}
+```
+
+### Global data (`site.data()`)
+
+Inside `bolota.config.ts`, export a function that receives a `site` registry with a `data()` method:
+
+```ts
+export default function (site) {
+  site.data("year", 2026);
+  site.data("randomNumber", () => Math.random());
+  site.data("layout", "post", "posts"); // scoped to the posts/ directory
+
+  return {
+    // ...other config
+  };
+}
+```
+
+Global data can also be declared from the object-style config:
+
+```ts
+export default {
+  data: {
+    year: 2026,
+  },
+  scopedData: {
+    posts: { layout: "post" },
+  },
+};
+```
+
+### Data precedence
+
+From lowest to highest priority:
+
+1. `config.site`
+2. Global data
+3. Scoped data
+4. Shared data from parent directories
+5. Shared data from the current directory
+6. Page frontmatter
 
 ---
 

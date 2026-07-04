@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import { loadConfig, defaultConfig } from "../src/core/config.ts";
 
@@ -10,7 +10,6 @@ describe("loadConfig", () => {
 
   beforeEach(async () => {
     tmpRoot = join(tmpBase, crypto.randomUUID());
-    await mkdir(tmpRoot, { recursive: true });
   });
 
   afterEach(async () => {
@@ -18,27 +17,28 @@ describe("loadConfig", () => {
   });
 
   it("returns default config when no config file exists", async () => {
-    const config = await loadConfig(tmpRoot);
+    const { config, data } = await loadConfig(tmpRoot);
     expect(config).toEqual(defaultConfig);
+    expect(data.getGlobalData()).toEqual({});
   });
 
   it("loads and merges user config", async () => {
-    await writeFile(
+    await Bun.write(
       join(tmpRoot, "bolota.config.ts"),
       `export default { port: 8080, site: { name: "Test" } };`,
     );
-    const config = await loadConfig(tmpRoot);
+    const { config } = await loadConfig(tmpRoot);
     expect(config.port).toBe(8080);
     expect(config.site).toEqual({ name: "Test" });
     expect(config.contentDir).toBe(defaultConfig.contentDir);
   });
 
   it("ignores invalid config values (e.g. empty strings)", async () => {
-    await writeFile(
+    await Bun.write(
       join(tmpRoot, "bolota.config.ts"),
       `export default { srcDir: "", port: "not-a-number" };`,
     );
-    const config = await loadConfig(tmpRoot);
+    const { config } = await loadConfig(tmpRoot);
     expect(config.srcDir).toBe(defaultConfig.srcDir);
     expect(config.port).toBe(defaultConfig.port);
   });

@@ -1,8 +1,9 @@
 import { join } from "node:path";
-import { rm, mkdir } from "node:fs/promises";
+import { rm } from "node:fs/promises";
 import type { BolotaConfig } from "./config.ts";
 import type { Page } from "./pages.ts";
 import { discoverPages } from "./pages.ts";
+import { SiteData } from "./data.ts";
 
 /** Plugin interface for extending the build pipeline */
 export interface Plugin {
@@ -21,10 +22,30 @@ export class Site {
   readonly pages: Page[] = [];
   private plugins: Plugin[] = [];
   readonly cwd: string;
+  readonly data: SiteData;
 
-  constructor(config: BolotaConfig, cwd: string = process.cwd()) {
+  constructor(
+    config: BolotaConfig,
+    cwd: string = process.cwd(),
+    data: SiteData = new SiteData(),
+  ) {
     this.config = config;
     this.cwd = cwd;
+    this.data = data;
+
+    // Populate data from object-style config (global and scoped).
+    if (config.data) {
+      for (const [key, value] of Object.entries(config.data)) {
+        this.data.data(key, value);
+      }
+    }
+    if (config.scopedData) {
+      for (const [scope, map] of Object.entries(config.scopedData)) {
+        for (const [key, value] of Object.entries(map)) {
+          this.data.data(key, value, scope);
+        }
+      }
+    }
   }
 
   /** Register a plugin */
@@ -39,6 +60,7 @@ export class Site {
    */
   async build(): Promise<void> {
     await this.cleanDestDir();
+    await this.data.loadSharedData(join(this.config.srcDir, this.config.contentDir));
 
     for (const plugin of this.plugins) {
       if (plugin.buildStart) await plugin.buildStart(this);
@@ -73,6 +95,6 @@ export class Site {
     // Bun has no native recursive directory removal API, so node:fs/promises
     // is intentionally retained here.
     await rm(dest, { recursive: true, force: true });
-    await mkdir(dest, { recursive: true });
+    // Bun.write creates parent directories automatically on the first page write.
   }
 }

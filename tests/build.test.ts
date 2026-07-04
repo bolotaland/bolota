@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import { Site } from "../src/core/site.ts";
 import { transformMarkdown } from "../src/plugins/markdown.ts";
@@ -23,8 +23,6 @@ describe("Site.build", () => {
 
   beforeEach(async () => {
     tmpRoot = join(tmpBase, crypto.randomUUID());
-    await mkdir(join(tmpRoot, "content"), { recursive: true });
-    await mkdir(join(tmpRoot, "layouts"), { recursive: true });
   });
 
   afterEach(async () => {
@@ -32,11 +30,11 @@ describe("Site.build", () => {
   });
 
   it("builds a page and applies its layout", async () => {
-    await writeFile(
+    await Bun.write(
       join(tmpRoot, "content", "hello.md"),
       `---\ntitle: Hello\nlayout: base\n---\n\n# Hello`,
     );
-    await writeFile(
+    await Bun.write(
       join(tmpRoot, "layouts", "base.vto"),
       `<html><body>{{ content |> safe }}</body></html>`,
     );
@@ -54,8 +52,8 @@ describe("Site.build", () => {
 
     site.use({
       name: "vento",
-      async transform(page) {
-        return applyLayout(page, config, env);
+      async transform(page, site) {
+        return applyLayout(page, site, env);
       },
     });
 
@@ -79,10 +77,9 @@ describe("Site.build", () => {
   });
 
   it("cleans the output directory before rebuilding", async () => {
-    await writeFile(join(tmpRoot, "content", "hello.md"), "# Hello");
+    await Bun.write(join(tmpRoot, "content", "hello.md"), "# Hello");
     const stalePath = join(tmpRoot, "_site", "stale.html");
-    await mkdir(join(tmpRoot, "_site"), { recursive: true });
-    await writeFile(stalePath, "old");
+    await Bun.write(stalePath, "old");
 
     const config = { ...baseConfig, srcDir: tmpRoot };
     const site = new Site(config, tmpRoot);
