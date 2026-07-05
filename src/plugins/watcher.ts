@@ -90,22 +90,47 @@ export function watchFiles(
   };
 }
 
+export interface WatchHooks {
+  /** Called after a rebuild that produced no errors (e.g. live-reload broadcast). */
+  onRebuild?: () => void;
+  /** Called when a rebuild fails or finishes with page errors (e.g. error overlay). */
+  onError?: (messages: string[]) => void;
+}
+
 /**
  * Watch the site and rebuild on changes.
- * `onRebuild` runs after each successful rebuild (e.g. live-reload broadcast).
  */
 export function startWatcher(
   config: BolotaConfig,
   site: Site,
   cwd: string = process.cwd(),
-  onRebuild?: () => void,
+  hooks: WatchHooks = {},
 ): () => void {
   const cleanup = watchFiles(
     config,
     async () => {
       console.log("[watch] Rebuilding...");
-      await site.build();
-      onRebuild?.();
+      try {
+        await site.build();
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(`[watch] Build failed: ${message}`);
+        hooks.onError?.([message]);
+        return;
+      }
+
+      if (site.errors.length > 0) {
+        const messages = site.errors.map(
+          (e) => `${e.page} (${e.plugin}): ${e.message}`,
+        );
+        for (const message of messages) {
+          console.error(`[watch] ${message}`);
+        }
+        hooks.onError?.(messages);
+        return;
+      }
+
+      hooks.onRebuild?.();
       console.log("[watch] Rebuild complete.");
     },
     cwd,

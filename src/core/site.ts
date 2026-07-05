@@ -18,6 +18,15 @@ export interface Plugin {
   buildEnd?: (site: Site) => Promise<void> | void;
 }
 
+/** A page-level failure collected during a build instead of aborting it. */
+export interface BuildError {
+  /** Relative path of the failing page. */
+  page: string;
+  /** Name of the plugin whose transform threw. */
+  plugin: string;
+  message: string;
+}
+
 /** Core site builder that orchestrates the static generation pipeline */
 export class Site {
   readonly config: BolotaConfig;
@@ -29,6 +38,9 @@ export class Site {
   sections: Map<string, Section> = new Map();
   /** Per-build memoization (layouts, shortcodes, render hooks). Cleared at the start of every build. */
   readonly buildCache = new Map<string, unknown>();
+  /** Page-level errors from the last build. A failing page is dropped from
+   *  the output; the rest of the site still builds. */
+  readonly errors: BuildError[] = [];
 
   constructor(
     config: BolotaConfig,
@@ -61,15 +73,22 @@ export class Site {
 
   /**
    * Run the full build pipeline.
-   * Cleans the output directory, then discovers, transforms, and writes pages.
+   * Discovers, transforms, and writes pages, then cleans up.
    *
    * Each plugin's transform runs as a phase over all pages, so later phases
    * (e.g. layouts) see the output of earlier ones (e.g. compiled Markdown)
    * for every page — collections and sections are rebuilt between phases.
+   *
+   * A transform that throws does not abort the build: the failing page is
+   * dropped and the error is collected in {@link errors}. Callers decide
+   * what to do with them (the CLI exits non-zero, the watcher shows an
+   * overlay). The output directory is only cleaned once all transforms have
+   * run, so a build that dies early leaves the previous output intact.
    */
   async build(): Promise<void> {
     this.buildCache.clear();
-    await this.cleanDestDir();
+    this.errors.length = 0;
+    this.assertSafeOutDir();
     await this.data.loadSharedData(resolve(this.cwd, this.config.srcDir, this.config.contentDir));
 
     for (const plugin of this.plugins) {
@@ -81,11 +100,23 @@ export class Site {
 
     for (const plugin of this.plugins) {
       if (!plugin.transform) continue;
-      const results = await Promise.all(pages.map((page) => plugin.transform!(page, this)));
+      const results = await Promise.all(pages.map(async (page) => {
+        try {
+          return await plugin.transform!(page, this);
+        } catch (error: unknown) {
+          this.errors.push({
+            page: page.relativePath,
+            plugin: plugin.name,
+            message: error instanceof Error ? error.message : String(error),
+          });
+          return null;
+        }
+      }));
       pages = results.filter((page): page is Page => page !== null);
       this.setPages(pages);
     }
 
+    await this.cleanDestDir();
     await this.writePages(pages);
 
     for (const plugin of this.plugins) {
@@ -116,13 +147,13 @@ export class Site {
     }));
   }
 
-  private async cleanDestDir(): Promise<void> {
+  /** Refuse to clean an outDir containing the project or the content sources —
+   *  a misconfigured outDir ("." or "..") must never wipe the site. */
+  private assertSafeOutDir(): void {
     const dest = resolve(this.cwd, this.config.outDir);
     const projectRoot = resolve(this.cwd);
     const contentDir = resolve(this.cwd, this.config.srcDir, this.config.contentDir);
 
-    // Refuse to delete the project itself or anything containing the content
-    // sources — a misconfigured outDir ("." or "..") must never wipe the site.
     const contains = (parent: string, child: string): boolean =>
       child === parent || child.startsWith(parent + sep);
     if (contains(dest, projectRoot) || contains(dest, contentDir)) {
@@ -130,10 +161,13 @@ export class Site {
         `Refusing to clean outDir "${this.config.outDir}" (${dest}): it contains project sources.`,
       );
     }
+  }
 
+  private async cleanDestDir(): Promise<void> {
+    this.assertSafeOutDir();
     // Bun has no native recursive directory removal API, so node:fs/promises
     // is intentionally retained here.
-    await rm(dest, { recursive: true, force: true });
+    await rm(resolve(this.cwd, this.config.outDir), { recursive: true, force: true });
     // Bun.write creates parent directories automatically on the first page write.
   }
 }

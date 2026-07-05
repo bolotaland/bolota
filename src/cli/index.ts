@@ -116,11 +116,14 @@ async function main(): Promise<void> {
     },
   });
 
+  // Runs in buildEnd: the output directory is cleaned after the transform
+  // phases, so assets must be copied once pages are written, not during them.
   site.use({
     name: "colocated",
-    async transform(page, site) {
-      await copyColocatedAssets(page, config, site.cwd);
-      return page;
+    async buildEnd(site) {
+      await Promise.all(
+        site.pages.map((page) => copyColocatedAssets(page, config, site.cwd)),
+      );
     },
   });
 
@@ -145,16 +148,31 @@ async function main(): Promise<void> {
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
 
+  const reportBuildErrors = (): void => {
+    for (const e of site.errors) {
+      console.error(`[build] ${e.page} (${e.plugin}): ${e.message}`);
+    }
+  };
+
   if (command === "build") {
     await site.build();
+    if (site.errors.length > 0) {
+      reportBuildErrors();
+      console.error(`Build finished with ${site.errors.length} page error(s).`);
+      process.exit(1);
+    }
     console.log("Build complete.");
     return;
   }
 
   // serve / watch: build, serve, and rebuild on changes.
   await site.build();
+  reportBuildErrors();
   server = createDevServer(config);
-  watcherCleanup = startWatcher(config, site, process.cwd(), () => server?.broadcast());
+  watcherCleanup = startWatcher(config, site, process.cwd(), {
+    onRebuild: () => server?.broadcast(),
+    onError: (messages) => server?.broadcastError(messages),
+  });
   console.log(`Server running at http://localhost:${config.port}`);
 }
 

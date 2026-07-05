@@ -168,6 +168,14 @@ bun run /path/to/bolota/src/cli/index.ts --version
 
 In `serve` mode, Bolota injects a small script into HTML responses that connects to `/__livereload` via Server-Sent Events. When a file changes, the site is rebuilt and the browser reloads automatically. Layouts, shortcodes, render hooks, and `_data.ts` modules are re-imported when they change (mtime-based cache busting).
 
+### Error handling
+
+A page whose transform fails (a layout that throws, a missing explicit layout, …) does not abort the build: the page is dropped, the rest of the site still builds, and the error is reported with its page and plugin.
+
+- `build` prints every page error and exits with a non-zero status — CI never deploys a silently broken site.
+- `serve` prints the errors **and shows an overlay in the browser** describing what failed. Fixing the file rebuilds and reloads automatically.
+- The output directory is only cleaned after all transforms have run, so a build that dies early leaves the previous output intact.
+
 ---
 
 ## ⚙️ Configuration
@@ -594,7 +602,7 @@ Use in Markdown:
 {{ youtube(id="dQw4w9WgXcQ", className="video") }}
 ```
 
-Supported argument types: strings, numbers (integers and floats), booleans. Shortcodes inside fenced code blocks are left untouched, so you can document them safely.
+Supported argument types: strings, numbers (integers and floats), booleans. Shortcodes inside fenced code blocks and inline code spans are left untouched, so you can document them safely.
 
 ---
 
@@ -622,6 +630,12 @@ Available hooks:
 | Links | `render-link.ts` | `{ href, text, title? }` |
 | Headings | `render-heading.ts` | `{ depth, text, slug }` |
 
+Hooks are applied with Bun's native `HTMLRewriter`, so elements are matched structurally — attribute order does not matter. A few behaviors to know:
+
+- Without hooks, images and links are left as rendered; headings get an `id` attribute (slugs deduplicated per document, matching `page.headings`) while keeping their inline markup.
+- Hooks receive plain-text content: a heading hook on `# Hello *world*` gets `text: "Hello world"`.
+- Links whose content is not plain text (e.g. image links) are never passed to `render-link` — they are left untouched rather than flattened.
+
 ---
 
 ## 🔗 Internal links
@@ -644,7 +658,7 @@ Becomes:
 <a href="/about/#team">Team</a>
 ```
 
-This keeps links robust even if URLs change. A warning is printed at build time when an `@/` link points to a file that does not exist. Links inside fenced code blocks are left untouched.
+This keeps links robust even if URLs change. A warning is printed at build time when an `@/` link points to a file that does not exist. Links inside fenced code blocks and inline code spans are left untouched.
 
 ---
 
@@ -717,8 +731,9 @@ bun run ../../src/cli/index.ts build
 - **Language**: Strict TypeScript, native ESM
 - **Markdown**: `Bun.markdown.html()` — Bun's native parser
 - **Templating**: Native JavaScript/TypeScript functions
+- **Render hooks**: `HTMLRewriter` — Bun's native streaming HTML parser
 - **File I/O**: `Bun.file`, `Bun.write`, `Bun.Glob`
-- **Server**: `Bun.serve` with SSE live-reload
+- **Server**: `Bun.serve` with SSE live-reload and error overlay
 - **Tests**: `bun:test`
 
 ---

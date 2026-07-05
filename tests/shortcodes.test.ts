@@ -96,6 +96,29 @@ describe("shortcodes", () => {
     expect(html).toContain("{{ youtube(id=&quot;demo&quot;) }}");
   });
 
+  it("leaves shortcodes inside inline code spans untouched", async () => {
+    await Bun.write(
+      join(tmpRoot, "content", "inline.md"),
+      "---\nlayout: base\n---\n" +
+        'Write `{{ youtube(id="doc") }}` in Markdown. {{ youtube(id="live") }}',
+    );
+    await Bun.write(
+      join(tmpRoot, "layouts", "base.ts"),
+      `export default ({ content }) => content;`,
+    );
+    await Bun.write(
+      join(tmpRoot, "layouts", "shortcodes", "youtube.ts"),
+      `export default ({ id }) => \`<iframe src="/embed/\${id}"></iframe>\`;`,
+    );
+
+    await buildSite({ ...baseConfig, srcDir: tmpRoot }, tmpRoot);
+
+    const html = await Bun.file(join(tmpRoot, "_site", "inline", "index.html")).text();
+    expect(html).toContain('src="/embed/live"');
+    expect(html).not.toContain('src="/embed/doc"');
+    expect(html).toContain("{{ youtube(id=&quot;doc&quot;) }}");
+  });
+
   it("parses float args", async () => {
     await Bun.write(
       join(tmpRoot, "content", "hello.md"),

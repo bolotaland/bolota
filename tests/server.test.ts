@@ -108,4 +108,29 @@ describe("dev server", () => {
     const response = await fetch(url("/"));
     expect(await response.text()).not.toContain("/__livereload");
   });
+
+  it("broadcasts reload and error events over SSE", async () => {
+    dev = createDevServer(baseConfig, tmpRoot, { port: 0 });
+
+    const response = await fetch(url("/__livereload"));
+    const reader = response.body!.getReader();
+    const decoder = new TextDecoder();
+
+    const read = async (): Promise<string> => {
+      const { value } = await reader.read();
+      return decoder.decode(value);
+    };
+
+    expect(await read()).toContain(":ok");
+
+    dev.broadcast();
+    expect(await read()).toContain("data: reload");
+
+    dev.broadcastError(["bad.md (templates): layout exploded"]);
+    const chunk = await read();
+    expect(chunk).toContain("data: error:");
+    expect(chunk).toContain("layout exploded");
+
+    await reader.cancel();
+  });
 });

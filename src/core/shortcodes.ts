@@ -1,6 +1,6 @@
 import { join, resolve } from "node:path";
 import { importFresh } from "./modules.ts";
-import { splitCodeFences } from "./segments.ts";
+import { transformOutsideCodeAsync } from "./segments.ts";
 import type { Site } from "./site.ts";
 
 const SHORTCODE_REGEX = /\{\{\s*(\w+)\s*\(([^)]*)\)\s*\}\}/g;
@@ -100,12 +100,8 @@ async function processSegment(content: string, site: Site): Promise<string> {
 /**
  * Process shortcodes in Markdown content.
  * Syntax: {{ name(arg1="value", arg2=123) }}
- * Occurrences inside fenced code blocks are left untouched.
+ * Occurrences inside fenced code blocks and inline code spans are left untouched.
  */
 export async function processShortcodes(content: string, site: Site): Promise<string> {
-  const out: string[] = [];
-  for (const segment of splitCodeFences(content)) {
-    out.push(segment.code ? segment.text : await processSegment(segment.text, site));
-  }
-  return out.join("\n");
+  return transformOutsideCodeAsync(content, (text) => processSegment(text, site));
 }

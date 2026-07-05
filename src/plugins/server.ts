@@ -9,14 +9,44 @@ export interface DevServer {
   server: BunServer;
   /** Notify connected browsers that the site changed. */
   broadcast: () => void;
+  /** Show a build-error overlay in connected browsers. */
+  broadcastError: (messages: string[]) => void;
   stop: () => Promise<void>;
 }
 
 const LIVE_RELOAD_SCRIPT = `
 <script>
 (function(){
-  const es = new EventSource('/__livereload');
-  es.onmessage = function(e){ if(e.data === 'reload') location.reload(); };
+  var es = new EventSource('/__livereload');
+  var OVERLAY_ID = '__bolota-error-overlay';
+  function showOverlay(messages){
+    var old = document.getElementById(OVERLAY_ID);
+    if (old) old.remove();
+    var overlay = document.createElement('div');
+    overlay.id = OVERLAY_ID;
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:rgba(12,12,14,.94);color:#ff8484;font:14px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;padding:2rem;overflow:auto;white-space:pre-wrap';
+    var title = document.createElement('div');
+    title.textContent = 'Bolota — build error';
+    title.style.cssText = 'color:#fff;font-size:17px;font-weight:600;margin-bottom:1rem';
+    overlay.appendChild(title);
+    for (var i = 0; i < messages.length; i++) {
+      var p = document.createElement('p');
+      p.textContent = messages[i];
+      p.style.marginBottom = '.6rem';
+      overlay.appendChild(p);
+    }
+    var hint = document.createElement('div');
+    hint.textContent = 'The page content may be stale. Fix the error to reload automatically.';
+    hint.style.cssText = 'color:#9a9aa0;margin-top:1.2rem;font-size:12px';
+    overlay.appendChild(hint);
+    document.body.appendChild(overlay);
+  }
+  es.onmessage = function(e){
+    if (e.data === 'reload') { location.reload(); return; }
+    if (e.data.indexOf('error:') === 0) {
+      try { showOverlay(JSON.parse(e.data.slice(6))); } catch (err) {}
+    }
+  };
   es.onerror = function(){ es.close(); };
 })();
 </script>
@@ -49,8 +79,9 @@ export function createDevServer(
   let nextClientId = 0;
   const encoder = new TextEncoder();
 
-  const broadcast = (): void => {
-    const message = encoder.encode("data: reload\n\n");
+  const send = (data: string): void => {
+    // SSE payloads are single-line here: JSON.stringify escapes newlines.
+    const message = encoder.encode(`data: ${data}\n\n`);
     for (const [id, controller] of clients) {
       try {
         controller.enqueue(message);
@@ -59,6 +90,9 @@ export function createDevServer(
       }
     }
   };
+
+  const broadcast = (): void => send("reload");
+  const broadcastError = (messages: string[]): void => send(`error:${JSON.stringify(messages)}`);
 
   /** Join against outputDir, refusing paths that escape it (traversal). */
   const safeJoin = (...parts: string[]): string | null => {
@@ -166,6 +200,7 @@ export function createDevServer(
   return {
     server,
     broadcast,
+    broadcastError,
     stop: async () => {
       for (const [, controller] of clients) {
         try {

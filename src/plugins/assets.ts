@@ -1,6 +1,7 @@
-// Static asset copying plugin using Bun's native I/O and globbing
+// Static asset copying plugin using Bun's native globbing
 
-import { join, relative, resolve } from "node:path";
+import { copyFile, mkdir } from "node:fs/promises";
+import { dirname, join, relative, resolve } from "node:path";
 import type { BolotaConfig } from "../core/config.ts";
 
 /** OS metadata files that should never end up in the built site. */
@@ -11,8 +12,19 @@ export function isIgnoredAsset(fileName: string): boolean {
 }
 
 /**
+ * Copy a file without disturbing the watcher. `Bun.write(dest, Bun.file(src))`
+ * clones the file on APFS (clonefile), which makes FSEvents report a change
+ * on the SOURCE file — in watch mode every build would retrigger itself in an
+ * infinite rebuild loop. node:fs copyFile has no such side effect, so it is
+ * intentionally used here instead of the Bun API.
+ */
+export async function copyAssetFile(src: string, dest: string): Promise<void> {
+  await mkdir(dirname(dest), { recursive: true });
+  await copyFile(src, dest);
+}
+
+/**
  * Recursively copy the public directory into the output directory.
- * Uses Bun.write for native, zero-copy file creation.
  */
 export async function copyAssets(
   config: BolotaConfig,
@@ -37,7 +49,7 @@ export async function copyAssets(
     if (isIgnoredAsset(relPath.split(/[\\/]/).pop() ?? "")) {
       continue;
     }
-    copies.push(Bun.write(join(outputDir, relPath), Bun.file(filePath)));
+    copies.push(copyAssetFile(filePath, join(outputDir, relPath)));
   }
 
   await Promise.all(copies);

@@ -1,7 +1,7 @@
 import { dirname, join, resolve } from "node:path";
 import type { Page } from "../core/pages.ts";
 import type { BolotaConfig } from "../core/config.ts";
-import { isIgnoredAsset } from "./assets.ts";
+import { copyAssetFile, isIgnoredAsset } from "./assets.ts";
 
 function isCopyableFile(fileName: string): boolean {
   const lower = fileName.toLowerCase();
@@ -42,7 +42,7 @@ export async function copyColocatedAssets(
     if (!isCopyableFile(fileName)) {
       continue;
     }
-    copies.push(Bun.write(join(outputDir, fileName), Bun.file(filePath)));
+    copies.push(copyAssetFile(filePath, join(outputDir, fileName)));
   }
 
   await Promise.all(copies);

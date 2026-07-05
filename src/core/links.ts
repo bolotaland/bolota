@@ -1,5 +1,5 @@
 import { urlForContentPath } from "./pages.ts";
-import { transformOutsideCodeFences } from "./segments.ts";
+import { transformOutsideCode } from "./segments.ts";
 
 export interface ResolveLinksOptions {
   /** Relative paths ("/"-separated) of all known content files, for validation. */
@@ -12,13 +12,13 @@ export interface ResolveLinksOptions {
  * Resolve internal `@/` links in Markdown content.
  * `[About](@/about.md)` becomes `[About](/about/)`.
  * Fragments are preserved: `[Team](@/about.md#team)` becomes `[Team](/about/#team)`.
- * Links inside fenced code blocks are left untouched.
+ * Links inside fenced code blocks and inline code spans are left untouched.
  */
 export function resolveInternalLinks(
   content: string,
   options: ResolveLinksOptions = {},
 ): string {
-  return transformOutsideCodeFences(content, (text) =>
+  return transformOutsideCode(content, (text) =>
     text.replace(/]\(@\/([^)\s]+)\)/g, (match, target: string) => {
       const [filePart = "", ...fragmentParts] = target.split("#");
       const fragment = fragmentParts.length > 0 ? `#${fragmentParts.join("#")}` : "";

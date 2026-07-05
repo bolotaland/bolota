@@ -74,6 +74,87 @@ describe("render hooks", () => {
     expect(html).toContain("<figcaption>Alt text</figcaption>");
   });
 
+  it("matches elements regardless of attribute order", async () => {
+    const site = new Site({ ...baseConfig, srcDir: tmpRoot }, tmpRoot);
+    await Bun.write(
+      join(tmpRoot, "layouts", "_markup", "render-image.ts"),
+      `export default ({ src, alt }) => \`<img class="hooked" src="\${src}" alt="\${alt}">\`;`,
+    );
+
+    const { applyRenderHooks } = await import("../src/core/render-hooks.ts");
+    const html = await applyRenderHooks(`<p><img alt="A" src="/x.png"></p>`, site);
+    expect(html).toContain('class="hooked"');
+    expect(html).toContain('src="/x.png"');
+  });
+
+  it("preserves inline markup in headings without a hook", async () => {
+    await Bun.write(
+      join(tmpRoot, "content", "hello.md"),
+      `---\nlayout: base\n---\n# Hello *world*`,
+    );
+    await Bun.write(
+      join(tmpRoot, "layouts", "base.ts"),
+      `export default ({ content }) => content;`,
+    );
+
+    await buildSite({ ...baseConfig, srcDir: tmpRoot }, tmpRoot);
+
+    const html = await Bun.file(join(tmpRoot, "_site", "hello", "index.html")).text();
+    expect(html).toContain('<h1 id="hello-world">Hello <em>world</em></h1>');
+  });
+
+  it("passes flattened text of rich headings to the hook", async () => {
+    await Bun.write(
+      join(tmpRoot, "content", "hello.md"),
+      `---\nlayout: base\n---\n# Hello *world*`,
+    );
+    await Bun.write(
+      join(tmpRoot, "layouts", "base.ts"),
+      `export default ({ content }) => content;`,
+    );
+    await Bun.write(
+      join(tmpRoot, "layouts", "_markup", "render-heading.ts"),
+      `export default ({ depth, text, slug }) => \`<h\${depth} id="\${slug}" data-text="\${text}">\${text}</h\${depth}>\`;`,
+    );
+
+    await buildSite({ ...baseConfig, srcDir: tmpRoot }, tmpRoot);
+
+    const html = await Bun.file(join(tmpRoot, "_site", "hello", "index.html")).text();
+    expect(html).toContain('data-text="Hello world"');
+    expect(html).toContain('id="hello-world"');
+  });
+
+  it("deduplicates heading ids like page.headings", async () => {
+    await Bun.write(
+      join(tmpRoot, "content", "hello.md"),
+      `---\nlayout: base\n---\n# Setup\n\n## Setup`,
+    );
+    await Bun.write(
+      join(tmpRoot, "layouts", "base.ts"),
+      `export default ({ content }) => content;`,
+    );
+
+    await buildSite({ ...baseConfig, srcDir: tmpRoot }, tmpRoot);
+
+    const html = await Bun.file(join(tmpRoot, "_site", "hello", "index.html")).text();
+    expect(html).toContain('<h1 id="setup">');
+    expect(html).toContain('<h2 id="setup-1">');
+  });
+
+  it("leaves links with non-text content untouched even with a hook", async () => {
+    const site = new Site({ ...baseConfig, srcDir: tmpRoot }, tmpRoot);
+    await Bun.write(
+      join(tmpRoot, "layouts", "_markup", "render-link.ts"),
+      `export default ({ href, text }) => \`<a class="hooked" href="\${href}">\${text}</a>\`;`,
+    );
+
+    const { applyRenderHooks } = await import("../src/core/render-hooks.ts");
+    const input = `<p><a href="/x/"><img src="/i.png" alt=""></a> <a href="/y/">plain</a></p>`;
+    const html = await applyRenderHooks(input, site);
+    expect(html).toContain('<a href="/x/"><img src="/i.png" alt=""></a>');
+    expect(html).toContain('<a class="hooked" href="/y/">plain</a>');
+  });
+
   it("customizes heading rendering", async () => {
     await Bun.write(
       join(tmpRoot, "content", "hello.md"),

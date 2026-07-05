@@ -37,11 +37,14 @@ async function buildSite(config: BolotaConfig, cwd: string): Promise<Site> {
     },
   });
 
+  // Same wiring as the CLI: colocated assets are copied in buildEnd because
+  // the output directory is cleaned after the transform phases.
   site.use({
     name: "colocated",
-    async transform(page, site) {
-      await copyColocatedAssets(page, config, site.cwd);
-      return page;
+    async buildEnd(site) {
+      await Promise.all(
+        site.pages.map((page) => copyColocatedAssets(page, config, site.cwd)),
+      );
     },
   });
 

@@ -42,4 +42,10 @@ describe("resolveInternalLinks", () => {
     const result = resolveInternalLinks(content);
     expect(result).toBe("```md\n[About](@/about.md)\n```\n\n[About](/about/)");
   });
+
+  it("leaves links inside inline code spans untouched", () => {
+    const content = "Use `[About](@/about.md)` to link. [About](@/about.md)";
+    const result = resolveInternalLinks(content);
+    expect(result).toBe("Use `[About](@/about.md)` to link. [About](/about/)");
+  });
 });

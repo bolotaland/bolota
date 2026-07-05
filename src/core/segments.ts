@@ -1,12 +1,17 @@
 /**
- * Split Markdown into alternating segments of regular text and fenced code
- * blocks (``` or ~~~), so text-level transforms (shortcodes, internal links,
- * heading extraction) can skip code. Inline code spans are not detected.
+ * Split Markdown into alternating segments of regular text and code, so
+ * text-level transforms (shortcodes, internal links, heading extraction)
+ * can skip code. Two levels are handled:
+ *
+ * - fenced code blocks (``` or ~~~), line-based;
+ * - inline code spans (`...`, ``...``), following CommonMark's rule that a
+ *   span opens with a backtick run and closes with the next run of the same
+ *   length.
  */
 
 export interface MarkdownSegment {
   text: string;
-  /** True when the segment is a fenced code block. */
+  /** True when the segment is code (fenced block or inline span). */
   code: boolean;
 }
 
@@ -48,24 +53,97 @@ export function splitCodeFences(content: string): MarkdownSegment[] {
   return segments;
 }
 
-/** Apply a transform to every non-code segment, leaving code blocks intact. */
-export function transformOutsideCodeFences(
+/**
+ * Split text into inline code spans and regular text. A span opens with a
+ * run of N backticks and closes with the next run of exactly N backticks;
+ * unmatched runs stay literal text. Segments joined with "" rebuild the input.
+ */
+export function splitInlineCode(text: string): MarkdownSegment[] {
+  const segments: MarkdownSegment[] = [];
+  let cursor = 0;
+  let i = 0;
+
+  while (i < text.length) {
+    if (text[i] !== "`") {
+      i++;
+      continue;
+    }
+
+    const start = i;
+    while (i < text.length && text[i] === "`") i++;
+    const runLength = i - start;
+
+    // Find the next backtick run of exactly the same length.
+    let j = i;
+    let closeStart = -1;
+    while (j < text.length) {
+      if (text[j] !== "`") {
+        j++;
+        continue;
+      }
+      const runStart = j;
+      while (j < text.length && text[j] === "`") j++;
+      if (j - runStart === runLength) {
+        closeStart = runStart;
+        break;
+      }
+    }
+
+    if (closeStart === -1) {
+      continue; // Unmatched run: literal backticks, keep scanning after them.
+    }
+
+    const end = closeStart + runLength;
+    if (start > cursor) {
+      segments.push({ text: text.slice(cursor, start), code: false });
+    }
+    segments.push({ text: text.slice(start, end), code: true });
+    cursor = end;
+    i = end;
+  }
+
+  if (cursor < text.length) {
+    segments.push({ text: text.slice(cursor), code: false });
+  }
+
+  return segments;
+}
+
+/**
+ * Apply a transform to every part of the content that is neither a fenced
+ * code block nor an inline code span.
+ */
+export function transformOutsideCode(
   content: string,
   transform: (text: string) => string,
 ): string {
   return splitCodeFences(content)
-    .map((segment) => (segment.code ? segment.text : transform(segment.text)))
+    .map((block) =>
+      block.code
+        ? block.text
+        : splitInlineCode(block.text)
+            .map((span) => (span.code ? span.text : transform(span.text)))
+            .join(""),
+    )
     .join("\n");
 }
 
-/** Async variant of {@link transformOutsideCodeFences}. */
-export async function transformOutsideCodeFencesAsync(
+/** Async variant of {@link transformOutsideCode}. */
+export async function transformOutsideCodeAsync(
   content: string,
   transform: (text: string) => Promise<string>,
 ): Promise<string> {
-  const out: string[] = [];
-  for (const segment of splitCodeFences(content)) {
-    out.push(segment.code ? segment.text : await transform(segment.text));
+  const blocks: string[] = [];
+  for (const block of splitCodeFences(content)) {
+    if (block.code) {
+      blocks.push(block.text);
+      continue;
+    }
+    const spans: string[] = [];
+    for (const span of splitInlineCode(block.text)) {
+      spans.push(span.code ? span.text : await transform(span.text));
+    }
+    blocks.push(spans.join(""));
   }
-  return out.join("\n");
+  return blocks.join("\n");
 }
